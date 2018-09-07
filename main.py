@@ -377,9 +377,9 @@ def train(args, train_loader, disp_net, pose_exp_net, optimizer, epoch_size,  tr
             loss_2 = 0
 
         if w3 > 0:
-            loss_3 = args.joint_smooth_loss(depth,tgt_img_var)#args.smooth_loss(depth)
+            loss_3 = args.joint_smooth_loss(depth,depth)#args.smooth_loss(depth)
             if args.multi:
-                loss_3 += args.joint_smooth_loss(depth,tgt_img_var)#args.smooth_loss(depth_m)
+                loss_3 += args.joint_smooth_loss(depth,depth)#args.smooth_loss(depth_m)
             loss_3=loss_3.mean()
         else:
             loss_3=0.
@@ -405,7 +405,7 @@ def train(args, train_loader, disp_net, pose_exp_net, optimizer, epoch_size,  tr
                     tmp=torch.cat(rigid_flows[i],dim=3).permute(0,3,1,2)
                     stacked_rigid_flow.append(tmp)
             if len(stacked_ego_flow)>0:
-                loss_5+=args.joint_smooth_loss(stacked_ego_flow,tgt_img_var,p=1.0,eps=0.01).mean()
+                loss_5+=args.smooth_loss(stacked_ego_flow).mean()
             if len(stacked_rigid_flow) > 0:
                 loss_5 += args.smooth_loss(stacked_rigid_flow).mean()
 
