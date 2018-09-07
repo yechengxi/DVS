@@ -377,9 +377,9 @@ def train(args, train_loader, disp_net, pose_exp_net, optimizer, epoch_size,  tr
             loss_2 = 0
 
         if w3 > 0:
-            loss_3 = args.joint_smooth_loss(depth,depth)#args.smooth_loss(depth)
+            loss_3 = args.joint_smooth_loss(depth,depth[0])#args.smooth_loss(depth)
             if args.multi:
-                loss_3 += args.joint_smooth_loss(depth,depth)#args.smooth_loss(depth_m)
+                loss_3 += args.joint_smooth_loss(depth,depth[0])#args.smooth_loss(depth_m)
             loss_3=loss_3.mean()
         else:
             loss_3=0.
