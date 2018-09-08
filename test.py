@@ -6,9 +6,17 @@ img = imread('indoor_flying1_cnt_0000000368.jpg').astype(np.float32)
 
 
 import glob
-path="/home/cxy/Data/DVS/indoor_flying/"
+path="/home/cxy/Data/DVS/MVSEC/"
 import os
-cam_lst=sorted(glob.glob(os.path.join(path,"indoor_*_cam.txt")))
+
+import fnmatch
+import os
+
+cam_lst = []
+for root, dirnames, filenames in os.walk(path):
+    for filename in fnmatch.filter(filenames, '*_cam.txt'):
+        cam_lst.append(os.path.join(root, filename))
+    cam_lst=sorted(cam_lst)
 print(cam_lst)
 
 scenes=[scene.replace('_cam.txt','') for scene in cam_lst]

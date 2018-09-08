@@ -106,6 +106,8 @@ parser.add_argument('--final-map-size', default=1, type=int, help='final map siz
 parser.add_argument("--dataset-dir", default='.', type=str, help="Dataset directory")
 parser.add_argument("--dataset-list", default=None, type=str, help="Dataset list file")
 
+parser.add_argument("--scale", default=1., type=float, help="rescaling factor")
+
 best_error = -1
 n_iter = 0
 
@@ -127,13 +129,14 @@ def main():
             output_writers.append(SummaryWriter(args.save_path/'valid'/str(i)))
 
     # Data loading code
-    train_transform = custom_transforms.Compose([
+    train_transform = custom_transforms.Compose([custom_transforms.CropBottom(),
         custom_transforms.RandomHorizontalFlip(),
         custom_transforms.RandomScaleCrop(),
         custom_transforms.ArrayToTensor()
     ])
 
-    valid_transform = custom_transforms.Compose([custom_transforms.ArrayToTensor()])
+    valid_transform = custom_transforms.Compose([custom_transforms.CropBottom(),
+                                                 custom_transforms.ArrayToTensor()])
 
     print("=> fetching scenes in '{}'".format(args.data))
     train_set = SequenceFolder(
@@ -141,7 +144,8 @@ def main():
         transform=train_transform,
         seed=args.seed,
         train=True,
-        sequence_length=args.sequence_length
+        sequence_length=args.sequence_length,
+        scale=args.scale
     )
 
     # if no Groundtruth is avalaible, Validation set is the same type as training set to measure photometric loss from warping
@@ -151,6 +155,7 @@ def main():
         seed=args.seed,
         train=False,
         sequence_length=args.sequence_length,
+        scale=args.scale
     )
 
     print('{} samples found in {} train scenes'.format(len(train_set), len(train_set.scenes)))
@@ -170,7 +175,7 @@ def main():
 
 
     if args.arch=='ecn':
-        disp_net = models.ECN_Disp(input_size=128,init_planes=args.n_channel,scale_factor=args.scale_factor,growth_rate=args.growth_rate,final_map_size=args.final_map_size,norm_type=args.norm_type).cuda()
+        disp_net = models.ECN_Disp(input_size=260*args.scale*.75,init_planes=args.n_channel,scale_factor=args.scale_factor,growth_rate=args.growth_rate,final_map_size=args.final_map_size,norm_type=args.norm_type).cuda()
     else:
         disp_net = models.DispNetS().cuda()
 
@@ -184,7 +189,7 @@ def main():
     output_disp=args.multi
 
     if args.arch == 'ecn':
-        pose_exp_net = models.ECN_Pose(input_size=128, nb_ref_imgs=args.sequence_length - 1,init_planes=args.n_channel//2,scale_factor=args.scale_factor,growth_rate=args.growth_rate//2,final_map_size=args.final_map_size,
+        pose_exp_net = models.ECN_Pose(input_size=260*args.scale*.75, nb_ref_imgs=args.sequence_length - 1,init_planes=args.n_channel//2,scale_factor=args.scale_factor,growth_rate=args.growth_rate//2,final_map_size=args.final_map_size,
                                           output_exp=output_exp,output_exp2=output_exp2, output_pixel_pose=output_pixel_pose,
                                           output_disp=output_disp,norm_type=args.norm_type).cuda()
     else:
@@ -377,9 +382,9 @@ def train(args, train_loader, disp_net, pose_exp_net, optimizer, epoch_size,  tr
             loss_2 = 0
 
         if w3 > 0:
-            loss_3 = args.joint_smooth_loss(depth,depth[0])#args.smooth_loss(depth)
+            loss_3 = args.smooth_loss(depth)#args.smooth_loss(depth)
             if args.multi:
-                loss_3 += args.joint_smooth_loss(depth,depth[0])#args.smooth_loss(depth_m)
+                loss_3 += args.smooth_loss(depth_m)#args.smooth_loss(depth_m)
             loss_3=loss_3.mean()
         else:
             loss_3=0.
@@ -681,7 +686,10 @@ def validate_with_gt(args, val_loader, disp_net, pose_exp_net, epoch, output_wri
 
             # compute output
             output_disp_s = disp_net(tgt_img_var)
+            output_disp_s=scaling(output_disp_s,output_size=depth.unsqueeze(1).shape)
+
             output_depth_s = 1/output_disp_s
+
 
             explainability_mask, explainability_mask2, pixel_pose, output_disp_m, pose = pose_exp_net(tgt_img_var, ref_imgs_var)
             if args.multi:

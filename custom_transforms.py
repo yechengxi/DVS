@@ -18,6 +18,7 @@ class Compose(object):
         return images, intrinsics
 
 
+
 class Normalize(object):
     def __init__(self, mean, std):
         self.mean = mean
@@ -28,6 +29,8 @@ class Normalize(object):
             for t, m, s in zip(tensor, self.mean, self.std):
                 t.sub_(m).div_(s)
         return images, intrinsics
+
+
 
 
 class ArrayToTensor(object):
@@ -41,6 +44,22 @@ class ArrayToTensor(object):
             # handle numpy array
             tensors.append(torch.from_numpy(im).float()/255)
         return tensors, intrinsics
+
+
+class CropBottom(object):
+    """Randomly zooms images up to 15% and crop them to keep same size as before."""
+
+    def __call__(self, images, intrinsics):
+        assert intrinsics is not None
+        output_intrinsics = np.copy(intrinsics)
+
+        in_h, in_w = images[0].shape
+        offset_y = in_h //4
+        cropped_images = [im[0:in_h-offset_y, :] for im in images]
+
+        output_intrinsics=intrinsics
+
+        return cropped_images, output_intrinsics
 
 
 class RandomHorizontalFlip(object):

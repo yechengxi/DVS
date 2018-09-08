@@ -5,7 +5,7 @@ from path import Path
 import random
 import os
 import glob
-
+import fnmatch
 
 def load_as_float(path):
     return imread(path).astype(np.float32)
@@ -33,7 +33,15 @@ class SequenceFolder(data.Dataset):
         self.LoadToRam=LoadToRam
         self.scale=scale
         self.root = Path(root)
-        self.scenes = sorted(glob.glob(os.path.join(root,"indoor_*_cam.txt")))
+
+        cam_lst = []
+        for root, dirnames, filenames in os.walk(root):
+            for filename in fnmatch.filter(filenames, '*_cam.txt'):
+                cam_lst.append(os.path.join(root, filename))
+            cam_lst = sorted(cam_lst)
+        #print(cam_lst)
+
+        self.scenes = cam_lst
         self.scenes=[scene.replace('_cam.txt','') for scene in self.scenes]
 
         split=int(len(self.scenes)*0.75)
