@@ -87,7 +87,7 @@ parser.add_argument('--simple', action='store_true',help='use simple warping')
 
 #optimizer
 parser.add_argument('--optimizer', default='Adam', help='optimizer(SGD|Adam)')
-parser.add_argument('--lr-scheduler', default='', help='learning rate scheduler(multistep|cosine)')
+parser.add_argument('--lr-scheduler', default='cosine', help='learning rate scheduler(multistep|cosine)')
 parser.add_argument('--milestone', default=0.4, type=float, help='milestone in multistep scheduler')
 parser.add_argument('--multistep-gamma', default=0.1, type=float,
                     help='the gamma parameter in multistep|plateau scheduler')

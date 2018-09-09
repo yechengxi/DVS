@@ -81,7 +81,7 @@ class simple_photometric_reconstruction_loss(nn.Module):
                 diff = (tgt_img_scaled - ref_img_warped) * out_of_bound
                 if explainability_mask is not None:
                     diff = diff * explainability_mask[:,i:i+1].expand_as(diff)
-                if ssim_w>0:
+                if ssim_w>0 and min(ref_img_warped.shape[2:])>11:
                     ssim_loss = ssim(tgt_img_scaled,ref_img_warped,size_average=False,mask=out_of_bound*explainability_mask[:,i:i+1])
                 else:
                     ssim_loss=0.
@@ -138,7 +138,7 @@ class two_stage_photometric_reconstruction_loss(nn.Module):
                 diff = (tgt_img_scaled - ref_img_warped) * out_of_bound
                 if explainability_mask is not None:
                     diff = diff * explainability_mask[:,i:i+1].expand_as(diff)
-                if ssim_w>0:
+                if ssim_w>0 and min(ref_img_warped.shape[2:])>11:
                     ssim_loss = ssim(tgt_img_scaled,ref_img_warped,size_average=False,mask=out_of_bound*explainability_mask[:,i:i+1])
                 else:
                     ssim_loss=0.
@@ -153,7 +153,7 @@ class two_stage_photometric_reconstruction_loss(nn.Module):
                 if explainability_mask2 is not None:
                     diff = diff * explainability_mask2[:,i:i+1].expand_as(diff)
 
-                if ssim_w>0:
+                if ssim_w>0 and min(ref_img_warped.shape[2:])>11:
                     ssim_loss = ssim(tgt_img_scaled,ref_img_warped,size_average=False,mask=out_of_bound*explainability_mask2[:,i:i+1])
                 else:
                     ssim_loss=0.
