@@ -161,11 +161,6 @@ def inverse_warp(img, depth, pose, intrinsics, intrinsics_inv, rotation_mode='eu
     Returns:
         Source image warped to the target image plane
     """
-    check_sizes(img, 'img', 'B3HW')
-    check_sizes(depth, 'depth', 'BHW')
-    check_sizes(pose, 'pose', 'B6')
-    check_sizes(intrinsics, 'intrinsics', 'B33')
-    check_sizes(intrinsics_inv, 'intrinsics', 'B33')
 
     assert(intrinsics_inv.size() == intrinsics.size())
 
@@ -181,7 +176,15 @@ def inverse_warp(img, depth, pose, intrinsics, intrinsics_inv, rotation_mode='eu
     src_pixel_coords = cam2pixel(cam_coords, proj_cam_to_src_pixel[:,:,:3], proj_cam_to_src_pixel[:,:,-1:], padding_mode)  # [B,H,W,2]
     projected_img = torch.nn.functional.grid_sample(img, src_pixel_coords, padding_mode=padding_mode)
 
-    return projected_img
+    b,c,h,w=img.shape
+    i_range = torch.arange(0, h, dtype=depth.dtype, device=depth.device, requires_grad=False).view(1, h, 1).expand(1, h, w)  # [1, H, W]
+    j_range = torch.arange(0, w, dtype=depth.dtype, device=depth.device, requires_grad=False).view(1, 1, w).expand(1, h, w)  # [1, H, W]
+    ones = torch.ones(1, h, w, dtype=depth.dtype, device=depth.device, requires_grad=False)
+    pixel_coords = torch.stack((j_range, i_range, ones), dim=1)  # [1, 3, H, W]
+
+    flow=(src_pixel_coords-pixel_coords[:,:2].permute(0,2,3,1))
+
+    return projected_img,flow
 
 
 

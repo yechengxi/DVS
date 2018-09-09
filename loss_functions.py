@@ -24,10 +24,11 @@ class photometric_reconstruction_loss(nn.Module):
             intrinsics_scaled = torch.cat((intrinsics[:, 0:2]/downscale, intrinsics[:, 2:]), dim=1)
             intrinsics_scaled_inv = torch.cat((intrinsics_inv[:, :, 0:2]*downscale, intrinsics_inv[:, :, 2:]), dim=2)
 
+            ego_flows_scaled=[]
             for i, ref_img in enumerate(ref_imgs_scaled):
                 current_pose = pose[:, i]
 
-                ref_img_warped = inverse_warp(ref_img, depth[:,0], current_pose, intrinsics_scaled, intrinsics_scaled_inv, rotation_mode, padding_mode)
+                ref_img_warped,ego_flow = inverse_warp(ref_img, depth[:,0], current_pose, intrinsics_scaled, intrinsics_scaled_inv, rotation_mode, padding_mode)
                 out_of_bound = 1 - (ref_img_warped == 0).prod(1, keepdim=True).type_as(ref_img_warped)
                 diff = (tgt_img_scaled - ref_img_warped) * out_of_bound
 
@@ -35,8 +36,9 @@ class photometric_reconstruction_loss(nn.Module):
                     diff = diff * explainability_mask[:,i:i+1].expand_as(diff)
 
                 reconstruction_loss += diff.abs().view(b,-1).mean(1)
+                ego_flows_scaled.append(ego_flow)
 
-            return reconstruction_loss
+            return reconstruction_loss,ego_flows_scaled
 
         if type(explainability_mask) not in [tuple, list]:
             explainability_mask = [explainability_mask]
@@ -44,9 +46,10 @@ class photometric_reconstruction_loss(nn.Module):
             depth = [depth]
 
         loss = 0
+        ego_flows=[]
         for d, mask in zip(depth, explainability_mask):
-            loss += one_scale(d, mask)
-        return loss
+            current_loss,ego_flow = one_scale(d, mask)
+        return loss,ego_flows
 
 
 import numpy as np

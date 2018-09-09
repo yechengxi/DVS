@@ -31,6 +31,8 @@ parser = argparse.ArgumentParser(description='Structure from Motion Learner',
 parser.add_argument('data', metavar='DIR',
                     help='path to dataset')
 parser.add_argument('--sequence-length', type=int, metavar='N', help='sequence length for training', default=3)
+parser.add_argument('--rotation-mode', type=str, choices=['euler', 'quat'], default='euler',
+                    help='rotation mode for PoseExpnet : euler (yaw,pitch,roll) or quaternion (last 3 coefficients)')
 parser.add_argument('--padding-mode', type=str, choices=['zeros', 'border'], default='zeros',
                     help='padding mode for image warping : this is important for photometric differenciation when going outside target image.'
                          ' zeros will null gradients outside target image.'
@@ -75,7 +77,7 @@ parser.add_argument('-s', '--smooth-loss-weight', type=float, help='weight for d
 parser.add_argument('-p','--pose-smooth-loss-weight', type=float, help='weight for pose smoothness loss', metavar='W', default=0.)
 parser.add_argument('-c','--consistency-loss-weight', type=float, help='weight for consistency loss', metavar='W', default=0.1)
 parser.add_argument('-o','--flow-smooth-loss-weight', type=float, help='weight for optical flow smoothness loss', metavar='W', default=0.001)
-parser.add_argument('--ssim-weight', type=float, help='weight for ssim loss', metavar='W', default=0.5)
+parser.add_argument('--ssim-weight', type=float, help='weight for ssim loss', metavar='W', default=0.)
 
 parser.add_argument('--multi', action='store_true', help='use multiple frames')
 
@@ -355,7 +357,7 @@ def train(args, train_loader, disp_net, pose_exp_net, optimizer, epoch_size,  tr
             disparities=disparities_s
 
         if not args.simple:
-            loss_1 = args.photometric_reconstruction_loss(tgt_img_var, ref_imgs_var,
+            loss_1,ego_flows = args.photometric_reconstruction_loss(tgt_img_var, ref_imgs_var,
                                                      intrinsics_var, intrinsics_inv_var,
                                                      depth, explainability_mask, pose,
                                                      args.rotation_mode, args.padding_mode)
@@ -399,21 +401,23 @@ def train(args, train_loader, disp_net, pose_exp_net, optimizer, epoch_size,  tr
             loss_4 = 0
 
         loss_5 = 0
-        if w5>0:
+        if w5>0 and ego_flows is not None:
             stacked_ego_flow=[]
             stacked_rigid_flow=[]
-            for i in range(len(ego_flows)):
-                if ego_flows is not None:
-                    tmp=torch.cat(ego_flows[i],dim=3).permute(0,3,1,2)
-                    stacked_ego_flow.append(tmp)
-                if rigid_flows is not None:
-                    tmp=torch.cat(rigid_flows[i],dim=3).permute(0,3,1,2)
-                    stacked_rigid_flow.append(tmp)
+            if ego_flows is not None:
+                for i in range(len(ego_flows)):
+                    if ego_flows is not None:
+                        tmp=torch.cat(ego_flows[i],dim=3).permute(0,3,1,2)
+                        stacked_ego_flow.append(tmp)
+                    if rigid_flows is not None:
+                        tmp=torch.cat(rigid_flows[i],dim=3).permute(0,3,1,2)
+                        stacked_rigid_flow.append(tmp)
             if len(stacked_ego_flow)>0:
                 loss_5+=args.smooth_loss(stacked_ego_flow).mean()
             if len(stacked_rigid_flow) > 0:
                 loss_5 += args.smooth_loss(stacked_rigid_flow).mean()
-
+        else:
+            w5=0
 
         if args.multi:
             loss_6 = torch.abs(depth_m[0]-depth_s[0].detach()).mean()
@@ -586,7 +590,7 @@ def validate_without_gt(args, val_loader, disp_net, pose_exp_net, epoch, output_
 
             if not args.simple:
 
-                loss_1 = args.photometric_reconstruction_loss(tgt_img_var, ref_imgs_var,
+                loss_1,ego_flows = args.photometric_reconstruction_loss(tgt_img_var, ref_imgs_var,
                                                          intrinsics_var, intrinsics_inv_var,
                                                          depth, explainability_mask, pose,
                                                          args.rotation_mode, args.padding_mode)
