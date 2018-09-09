@@ -55,9 +55,10 @@ class CropBottom(object):
 
         in_h, in_w,in_c = images[0].shape
         offset_y = in_h //4
-        cropped_images = [im[0:in_h-offset_y, :] for im in images]
+        cropped_images = [im[offset_y:in_h-offset_y, :] for im in images]
 
         output_intrinsics=intrinsics
+        output_intrinsics[1,2] -= offset_y
 
         return cropped_images, output_intrinsics
 
