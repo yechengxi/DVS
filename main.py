@@ -439,7 +439,7 @@ def train(args, train_loader, disp_net, pose_exp_net, optimizer, epoch_size,  tr
         if args.training_output_freq > 0 and n_iter % args.training_output_freq == 0:
             #print(pose.abs().view(pose.shape[0],2,6).mean(0).mean(0).data.cpu().numpy())
             #print('p',pixel_pose[0].view(pose.shape[0],12,-1).abs().mean(0).mean(1).view(2,6).mean(0).data.cpu().numpy())
-            train_writer.add_image('train Input', tensor2array(tgt_img[0],max_value=.1,colormap='bone'), n_iter)
+            train_writer.add_image('train Input', tensor2array(tgt_img[0,0],max_value=.1,colormap='bone'), n_iter)
 
 
 
@@ -511,8 +511,8 @@ def train(args, train_loader, disp_net, pose_exp_net, optimizer, epoch_size,  tr
                         flow = flow[0]
                         ref_warped = ref_warped[0]
 
-                        train_writer.add_image('train Warped Outputs {} {}'.format(k,j), tensor2array(ref_warped.data.cpu(),colormap='bone',max_value=0.1), n_iter)
-                        train_writer.add_image('train Diff Outputs {} {}'.format(k,j), tensor2array(0.5*(tgt_img_scaled[0] - ref_warped).abs().data.cpu(),colormap='bone',max_value=0.1), n_iter)
+                        train_writer.add_image('train Warped Outputs {} {}'.format(k,j), tensor2array(ref_warped[0].data.cpu(),colormap='bone',max_value=0.1), n_iter)
+                        train_writer.add_image('train Diff Outputs {} {}'.format(k,j), tensor2array(0.5*(tgt_img_scaled[0] - ref_warped)[0].abs().data.cpu(),colormap='bone',max_value=0.1), n_iter)
 
 
 
@@ -717,7 +717,7 @@ def validate_with_gt(args, val_loader, disp_net, pose_exp_net, epoch, output_wri
             if log_outputs and i % log_freq == 0 and i/log_freq < len(output_writers):
                 index = int(i//log_freq)
                 if epoch == 0:
-                    output_writers[index].add_image('val Input', tensor2array(tgt_img[0],colormap='bone',max_value=0.1), 0)
+                    output_writers[index].add_image('val Input', tensor2array(tgt_img[0,0],colormap='bone',max_value=0.1), 0)
                     depth_to_show = depth[0].cpu()
                     output_writers[index].add_image('val target Depth', tensor2array(depth_to_show, max_value=10), epoch)
                     depth_to_show[depth_to_show == 0] = 1000

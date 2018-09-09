@@ -40,7 +40,7 @@ class ArrayToTensor(object):
         tensors = []
         for im in images:
             # put it from HWC to CHW format
-            im = np.transpose(im[...,np.newaxis], (2, 0, 1))
+            im = np.transpose(im, (2, 0, 1))
             # handle numpy array
             tensors.append(torch.from_numpy(im).float()/255)
         return tensors, intrinsics
@@ -53,7 +53,7 @@ class CropBottom(object):
         assert intrinsics is not None
         output_intrinsics = np.copy(intrinsics)
 
-        in_h, in_w = images[0].shape
+        in_h, in_w,in_c = images[0].shape
         offset_y = in_h //4
         cropped_images = [im[0:in_h-offset_y, :] for im in images]
 
@@ -88,13 +88,20 @@ class RandomScaleCrop(object):
         assert intrinsics is not None
         output_intrinsics = np.copy(intrinsics)
 
-        in_h, in_w = images[0].shape
+        in_h, in_w,in_c = images[0].shape
         x_scaling, y_scaling = np.random.uniform(1,1.15,2)
         scaled_h, scaled_w = int(in_h * y_scaling), int(in_w * x_scaling)
 
         output_intrinsics[0] *= x_scaling
         output_intrinsics[1] *= y_scaling
-        scaled_images = [imresize(im, (scaled_h, scaled_w)) for im in images]
+        scaled_images=[]
+        for im in images:
+            chs=[]
+            for c in range(im.shape[2]):
+                chs.append(imresize(im[:,:,c], (scaled_h, scaled_w)))
+            scaled_images.append(np.stack(chs,axis=2))
+
+        #scaled_images = [imresize(im, (scaled_h, scaled_w)) for c  for im in images]
 
         offset_y = np.random.randint(scaled_h - in_h + 1)
         offset_x = np.random.randint(scaled_w - in_w + 1)
