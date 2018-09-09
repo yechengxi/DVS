@@ -157,7 +157,8 @@ def main():
         seed=args.seed,
         train=False,
         sequence_length=args.sequence_length,
-        scale=args.scale
+        scale=args.scale,
+        gt=args.with_gt
     )
 
     print('{} samples found in {} train scenes'.format(len(train_set), len(train_set.scenes)))
@@ -272,6 +273,8 @@ def main():
             args.current_scheduler.step()
         if args.lr_scheduler == 'multistep' or args.lr_scheduler == 'cosine':
             print('Current learning rate:', args.current_scheduler.get_lr()[0])
+
+        #errors, error_names = validate_without_gt(args, val_loader, disp_net,pose_exp_net, epoch, output_writers)
         #errors, error_names = validate_with_gt(args, val_loader, disp_net,pose_exp_net, epoch, output_writers)
         #errors, error_names = validate_on_kitti(args, val_loader, disp_net,pose_exp_net, epoch, output_writers)
 
@@ -385,8 +388,9 @@ def train(args, train_loader, disp_net, pose_exp_net, optimizer, epoch_size,  tr
 
         if w3 > 0:
             loss_3 = args.smooth_loss(depth)#args.smooth_loss(depth)
-            if args.multi:
-                loss_3 += args.smooth_loss(depth_m)#args.smooth_loss(depth_m)
+            #loss_3 = args.joint_smooth_loss(depth,depth[0])  # args.smooth_loss(depth)
+            #if args.multi:
+            #    loss_3 += args.smooth_loss(depth_m)#args.smooth_loss(depth_m)
             loss_3=loss_3.mean()
         else:
             loss_3=0.
@@ -560,6 +564,7 @@ def validate_without_gt(args, val_loader, disp_net, pose_exp_net, epoch, output_
     # switch to evaluate mode
     disp_net.eval()
     pose_exp_net.eval()
+    start_time = time.time()
 
     end = time.time()
     for i, (tgt_img, ref_imgs, intrinsics, intrinsics_inv) in enumerate(val_loader):
@@ -595,7 +600,7 @@ def validate_without_gt(args, val_loader, disp_net, pose_exp_net, epoch, output_
                                                          depth, explainability_mask, pose,
                                                          args.rotation_mode, args.padding_mode)
             else:
-                loss_1 = args.simple_photometric_reconstruction_loss(tgt_img_var, ref_imgs_var,
+                loss_1,ego_flows = args.simple_photometric_reconstruction_loss(tgt_img_var, ref_imgs_var,
                                                          intrinsics_var, intrinsics_inv_var,
                                                          depth, explainability_mask, pose,
                                                          args.ssim_weight,args.padding_mode)
@@ -614,24 +619,35 @@ def validate_without_gt(args, val_loader, disp_net, pose_exp_net, epoch, output_
                 index = int(i//100)
                 if epoch == 0:
                     for j,ref in enumerate(ref_imgs):
-                        output_writers[index].add_image('val Input {}'.format(j), tensor2array(tgt_img[0],colormap='bone',max_value=0.1), 0)
-                        output_writers[index].add_image('val Input {}'.format(j), tensor2array(ref[0],colormap='bone',max_value=0.1), 1)
+                        output_writers[index].add_image('val Input {}'.format(j), tensor2array(tgt_img[0,0],colormap='bone',max_value=0.1), 0)
+                        output_writers[index].add_image('val Input {}'.format(j), tensor2array(ref[0,0],colormap='bone',max_value=0.1), 1)
 
                 output_writers[index].add_image('val Dispnet Output Normalized', tensor2array(disp.data[0].cpu(), max_value=None, colormap='bone'), epoch)
                 output_writers[index].add_image('val Depth Output Normalized', tensor2array(1./disp.data[0].cpu(), max_value=None), epoch)
                 # log warped images along with explainability mask
-                for j,ref in enumerate(ref_imgs_var):
-                    ref_warped = inverse_warp(ref[:1], depth[:1,0], pose[:1,j],
-                                              intrinsics_var[:1], intrinsics_inv_var[:1],
-                                              rotation_mode=args.rotation_mode,
-                                              padding_mode=args.padding_mode)[0]
 
-                    output_writers[index].add_image('val Warped Outputs {}'.format(j), tensor2array(ref_warped.data.cpu(),colormap='bone',max_value=0.1), epoch)
-                    output_writers[index].add_image('val Diff Outputs {}'.format(j), tensor2array(0.5*(tgt_img_var[0] - ref_warped).abs().data.cpu(),colormap='bone',max_value=0.1), epoch)
+                for j,ref in enumerate(ref_imgs_var):
                     if explainability_mask is not None:
-                        output_writers[index].add_image('val Exp mask Outputs {}'.format(j), tensor2array(explainability_mask[0,j].data.cpu(), max_value=1, colormap='bone'), epoch)
-                    if explainability_mask2 is not None:
-                        output_writers[index].add_image('val Exp mask2 Outputs {}'.format(j), tensor2array(explainability_mask2[0,j].data.cpu(), max_value=1, colormap='bone'), epoch)
+                        output_writers[index].add_image('val Exp mask Outputs {}'.format( j),
+                                               tensor2array(explainability_mask[0, j].data.cpu(), max_value=1,
+                                                            colormap='bone'), n_iter)
+                    if not args.simple:
+
+                        ref_warped = inverse_warp(ref[:1], depth[:1,0], pose[:1,j],
+                                                  intrinsics_var[:1], intrinsics_inv_var[:1],
+                                                  rotation_mode=args.rotation_mode,
+                                                  padding_mode=args.padding_mode)[0]
+                    else:
+                        current_pose = pose[:1, j]
+
+                        ref_warped, _, flow = simple_inverse_warp(ref, depth[:, 0], current_pose,
+                                                                  intrinsics_var, intrinsics_inv_var,
+                                                                  padding_mode=args.padding_mode)
+                        flow = flow[0]
+                        ref_warped = ref_warped[0]
+
+                        output_writers[index].add_image('val Warped Outputs {}'.format(j), tensor2array(ref_warped[0].data.cpu(),colormap='bone',max_value=0.1), n_iter)
+                        output_writers[index].add_image('val Diff Outputs {}'.format(j), tensor2array(0.5*(tgt_img_var[0] - ref_warped)[0].abs().data.cpu(),colormap='bone',max_value=0.1), n_iter)
 
 
             if log_outputs and i < len(val_loader)-1:
@@ -649,6 +665,7 @@ def validate_without_gt(args, val_loader, disp_net, pose_exp_net, epoch, output_
             # measure elapsed time
             batch_time.update(time.time() - end)
             end = time.time()
+    end_time = time.time()
 
 
     if log_outputs:
@@ -661,6 +678,22 @@ def validate_without_gt(args, val_loader, disp_net, pose_exp_net, epoch, output_
         for i in range(poses.shape[1]):
             output_writers[0].add_histogram('{} {}'.format(prefix, coeffs_names[i]), poses[:,i], epoch)
         output_writers[0].add_histogram('disp_values', disp_values, epoch)
+
+    msg = 'Evaluation. '
+
+    error_names=['Total loss', 'Photo loss', 'Exp loss']
+
+    for i in range(len(error_names)):
+        msg += error_names[i]
+        msg += ': '
+        msg += str(round(losses.avg[i], 3))
+        msg += '; '
+
+    msg += ' Elapsed time: '
+    msg += str(round(end_time - start_time, 3))
+    msg += 'secs.'
+    print(msg)
+
     return losses.avg, ['Total loss', 'Photo loss', 'Exp loss']
 
 

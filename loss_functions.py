@@ -49,6 +49,8 @@ class photometric_reconstruction_loss(nn.Module):
         ego_flows=[]
         for d, mask in zip(depth, explainability_mask):
             current_loss,ego_flow = one_scale(d, mask)
+            loss=loss+current_loss
+            ego_flows.append(ego_flow)
         return loss,ego_flows
 
 

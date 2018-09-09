@@ -27,13 +27,13 @@ def load_image(file_path,scale):
 ##########################
 class SequenceFolder(data.Dataset):
 
-    def __init__(self, root, seed=None, train=True, sequence_length=3, transform=None, LoadToRam=False,scale=1.):
+    def __init__(self, root, seed=None, train=True, sequence_length=3, transform=None, LoadToRam=False,scale=1.,gt=True):
         np.random.seed(seed)
         random.seed(seed)
         self.LoadToRam=LoadToRam
         self.scale=scale
         self.root = Path(root)
-
+        self.gt=gt
         cam_lst = []
         for root, dirnames, filenames in os.walk(root):
             for filename in fnmatch.filter(filenames, '*_cam.txt'):
@@ -47,10 +47,10 @@ class SequenceFolder(data.Dataset):
         split=int(len(self.scenes)*0.75)
         if train:
             self.train=True
-            self.scenes=self.scenes[:split]
+            #self.scenes=self.scenes[:split]
         else:
             self.train=False
-            self.scenes = self.scenes[split:]
+            #self.scenes = self.scenes[split:]
         self.transform = transform
         self.crawl_folders(sequence_length)
 
@@ -68,6 +68,11 @@ class SequenceFolder(data.Dataset):
             l = [[float(num) for num in non_decimal.sub('', line).split()] for line in f]
             intrinsics=np.asarray(l[:3]).astype(np.float32)
             cnt_imgs=sorted(glob.glob(scene + '_cnt_*.jpg'))
+            split = int(len(cnt_imgs) * .8)
+            if self.train:
+                cnt_imgs=cnt_imgs[:split]
+            else:
+                cnt_imgs=cnt_imgs[split:]
             time_imgs = [img.replace('_cnt','_time') for img in cnt_imgs]
             self.depths=[img.replace('_cnt','_depth').replace('.jpg','.npy') for img in cnt_imgs]
 
@@ -91,8 +96,9 @@ class SequenceFolder(data.Dataset):
                 for j in shifts:
                     sample['ref_imgs_cnt'].append(cnt_imgs[i+j])
                     sample['ref_imgs_time'].append(time_imgs[i+j])
+                if self.train or os.path.exists(self.depths[i]) or (not self.gt):
+                    sequence_set.append(sample)
 
-                sequence_set.append(sample)
         random.shuffle(sequence_set)
         self.samples = sequence_set
 
@@ -126,7 +132,7 @@ class SequenceFolder(data.Dataset):
             ref_imgs = imgs[1:]
         else:
             intrinsics = np.copy(sample['intrinsics'])
-        if self.train:
+        if self.train or (not self.gt):
             return tgt_img, ref_imgs, intrinsics, np.linalg.inv(intrinsics)
         else:
             depth = np.load(sample['depth']).astype(np.float32)
