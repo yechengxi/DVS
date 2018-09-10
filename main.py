@@ -131,14 +131,18 @@ def main():
             output_writers.append(SummaryWriter(args.save_path/'valid'/str(i)))
 
     # Data loading code
-    train_transform = custom_transforms.Compose([custom_transforms.CropBottom(),
+    normalize = custom_transforms.Normalize(mean=[0.5, 0.5],
+                                            std=[0.5, 0.5])
+    train_transform = custom_transforms.Compose([#custom_transforms.CropBottom(),
         custom_transforms.RandomHorizontalFlip(),
         custom_transforms.RandomScaleCrop(),
-        custom_transforms.ArrayToTensor()
+        custom_transforms.ArrayToTensor(),
+        normalize
     ])
 
-    valid_transform = custom_transforms.Compose([custom_transforms.CropBottom(),
-                                                 custom_transforms.ArrayToTensor()])
+    valid_transform = custom_transforms.Compose([#custom_transforms.CropBottom(),
+                                                 custom_transforms.ArrayToTensor(),
+                                                normalize])
 
     print("=> fetching scenes in '{}'".format(args.data))
     train_set = SequenceFolder(
@@ -178,7 +182,8 @@ def main():
 
 
     if args.arch=='ecn':
-        disp_net = models.ECN_Disp(input_size=260*args.scale*.5,init_planes=args.n_channel,scale_factor=args.scale_factor,growth_rate=args.growth_rate,final_map_size=args.final_map_size,norm_type=args.norm_type).cuda()
+        disp_net = models.ECN_Disp(input_size=200*args.scale,#260*args.scale*.5,
+                                   init_planes=args.n_channel,scale_factor=args.scale_factor,growth_rate=args.growth_rate,final_map_size=args.final_map_size,norm_type=args.norm_type).cuda()
     else:
         disp_net = models.DispNetS().cuda()
 
@@ -192,7 +197,8 @@ def main():
     output_disp=args.multi
 
     if args.arch == 'ecn':
-        pose_exp_net = models.ECN_Pose(input_size=260*args.scale*.5, nb_ref_imgs=args.sequence_length - 1,init_planes=args.n_channel//2,scale_factor=args.scale_factor,growth_rate=args.growth_rate//2,final_map_size=args.final_map_size,
+        pose_exp_net = models.ECN_Pose(input_size=200*args.scale,#260*args.scale*.5,
+                                       nb_ref_imgs=args.sequence_length - 1,init_planes=args.n_channel//2,scale_factor=args.scale_factor,growth_rate=args.growth_rate//2,final_map_size=args.final_map_size,
                                           output_exp=output_exp,output_exp2=output_exp2, output_pixel_pose=output_pixel_pose,
                                           output_disp=output_disp,norm_type=args.norm_type).cuda()
     else:
