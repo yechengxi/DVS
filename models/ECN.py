@@ -202,7 +202,7 @@ class InvertedCascadeLayer(nn.Module):
 
 
 class ECN_Disp(nn.Module):
-    def __init__(self, input_size, in_planes=2, init_planes=32, scale_factor=0.5, growth_rate=32, final_map_size=1,
+    def __init__(self, input_size, in_planes=3, init_planes=32, scale_factor=0.5, growth_rate=32, final_map_size=1,
                  alpha=10, beta=0.01, norm_type='gn'):
         super(ECN_Disp, self).__init__()
         self.scale_factor = scale_factor
@@ -330,7 +330,7 @@ class ECN_Pose(nn.Module):
         self.beta = beta
         self.pred_planes = nb_ref_imgs * 8 + 1
 
-        in_planes = (1 + nb_ref_imgs) * 2
+        in_planes = (1 + nb_ref_imgs) *3
 
         out_planes = init_planes
         output_size = input_size

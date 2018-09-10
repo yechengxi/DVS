@@ -145,3 +145,107 @@ class SequenceFolder(data.Dataset):
 
 
 
+class ImSequenceFolder(data.Dataset):
+
+    def __init__(self, root, seed=None, train=True, sequence_length=3, transform=None, LoadToRam=False,scale=1.,gt=True):
+        np.random.seed(seed)
+        random.seed(seed)
+        self.LoadToRam=LoadToRam
+        self.scale=scale
+        self.root = Path(root)
+        self.gt=gt
+        cam_lst = []
+        for root, dirnames, filenames in os.walk(root):
+            for filename in fnmatch.filter(filenames, '*_cam.txt'):
+                cam_lst.append(os.path.join(root, filename))
+            cam_lst = sorted(cam_lst)
+        #print(cam_lst)
+
+        self.scenes = cam_lst
+        self.scenes=[scene.replace('_cam.txt','') for scene in self.scenes]
+
+        split=int(len(self.scenes)*0.75)
+        if train:
+            self.train=True
+            #self.scenes=self.scenes[:split]
+        else:
+            self.train=False
+            #self.scenes = self.scenes[split:]
+        self.transform = transform
+        self.crawl_folders(sequence_length)
+
+    def crawl_folders(self, sequence_length):
+        sequence_set = []
+        demi_length = (sequence_length-1)//2
+        shifts = list(range(-demi_length, demi_length + 1))
+        shifts.pop(demi_length)
+        for scene in self.scenes:
+
+            f = open(scene+'_cam.txt', 'r')
+
+            import re
+            non_decimal = re.compile(r'[^\d. ]+')
+            l = [[float(num) for num in non_decimal.sub('', line).split()] for line in f]
+            intrinsics=np.asarray(l[:3]).astype(np.float32)
+            imgs=sorted(glob.glob(scene + '_cmb_*.jpg'))
+            split = int(len(imgs) * .8)
+            if self.train:
+                imgs=imgs[:split]
+            else:
+                imgs=imgs[split:]
+            self.depths=[img.replace('_cmb','_depth').replace('.jpg','.npy') for img in imgs]
+
+            if len(imgs) < sequence_length:
+                continue
+
+            if self.scale!=1.:
+                intrinsics[0] *= self.scale
+                intrinsics[1] *= self.scale
+
+            if self.LoadToRam:
+                load = partial(load_image, scale=self.scale)
+                p = Pool(num_workers)
+                imgs= p.map(load, imgs)
+                p.close()
+
+
+            for i in range(demi_length, len(imgs)-demi_length):
+                sample = {'intrinsics': intrinsics, 'tgt': imgs[i], 'ref_imgs': [],'depth':self.depths[i]}
+                for j in shifts:
+                    sample['ref_imgs'].append(imgs[i+j])
+                if self.train or os.path.exists(self.depths[i]) or (not self.gt):
+                    sequence_set.append(sample)
+
+        random.shuffle(sequence_set)
+        self.samples = sequence_set
+
+    def __getitem__(self, index):
+        sample = self.samples[index]
+        if not self.LoadToRam:
+            tgt_img = load_as_float(sample['tgt'])
+
+            ref_imgs = [load_as_float(ref_img) for ref_img in sample['ref_imgs']]
+
+            if self.scale != 1.:
+                tgt_img = imresize(tgt_img, self.scale)
+                ref_imgs = [imresize(ref_img, self.scale) for ref_img in ref_imgs]
+
+        else:
+            tgt_img=sample['tgt']
+            ref_imgs=[ref_img for ref_img in sample['ref_imgs']]
+
+        if self.transform is not None:
+            imgs, intrinsics = self.transform([tgt_img] + ref_imgs, np.copy(sample['intrinsics']))
+            tgt_img = imgs[0]
+            ref_imgs = imgs[1:]
+        else:
+            intrinsics = np.copy(sample['intrinsics'])
+        if self.train or (not self.gt):
+            return tgt_img, ref_imgs, intrinsics, np.linalg.inv(intrinsics)
+        else:
+            depth = np.load(sample['depth']).astype(np.float32)
+            depth=depth[depth.shape[0]//4:-depth.shape[0]//4,:]
+            return tgt_img, ref_imgs, intrinsics, np.linalg.inv(intrinsics),depth
+
+    def __len__(self):
+        return len(self.samples)
