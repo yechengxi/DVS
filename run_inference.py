@@ -61,7 +61,6 @@ def main():
     disp_net.eval()
 
     if args.pretrained_posenet:
-        output_disp = args.multi
 
         if args.arch == 'ecn':
             pose_net = models.ECN_Pose(input_size=args.img_height, nb_ref_imgs=args.sequence_length - 1,
@@ -72,7 +71,7 @@ def main():
                                            output_disp=args.multi, norm_type=args.norm_type).cuda()
         else:
             pose_net = models.PoseExpNet(nb_ref_imgs=args.sequence_length - 1, output_exp=True,
-                                             output_pixel_pose=True, output_disp=True).cuda()
+                                             output_pixel_pose=False, output_disp=False).cuda()
 
 
         weights = torch.load(args.pretrained_posenet)
@@ -84,12 +83,8 @@ def main():
     output_dir.makedirs_p()
 
 
-
-
-
     import os
     import glob
-
 
     scene=os.path.join(args.dataset_dir,args.dataset_list)
     intrinsics = np.genfromtxt(dataset_dir / args.dataset_list+'_cam.txt').astype(np.float32).reshape((3, 3))
@@ -97,70 +92,46 @@ def main():
 
     intrinsics = torch.from_numpy(intrinsics).unsqueeze(0).cuda()
     intrinsics_inv = torch.from_numpy(intrinsics_inv).unsqueeze(0).cuda()
-    cnt_imgs = sorted(glob.glob(scene + '_cnt_*.jpg'))
-    time_imgs = [img.replace('_cnt', '_time') for img in cnt_imgs]
+    imgs = sorted(glob.glob(scene + '_cmb_*.jpg'))
 
+    print('{} files to test'.format(len(imgs)))
 
-    print('{} files to test'.format(len(cnt_imgs)))
-
-    output_s_old=0
-    ch2_old=0
     #for file in tqdm(test_files):
 
     class File:
         basename=None
         ext=None
 
-    for i in range(len(cnt_imgs)-2):
+    demi_length = (args.sequence_length - 1) // 2
+    shifts = list(range(-demi_length, demi_length + 1))
+    shifts.pop(demi_length)
+
+    for i in range(len(imgs)-args.sequence_length+1):
 
         file =File()
-        file.namebase=os.path.basename(cnt_imgs[i + 1]).replace('_cnt','').replace('.jpg','')
+        file.namebase=os.path.basename(imgs[i + 1]).replace('_cnt','').replace('.jpg','')
         file.ext='.jpg'
 
-        cnt_img = imread(cnt_imgs[i + 1]).astype(np.float32)
-        target_im1_cnt = imread(cnt_imgs[i + 2]).astype(np.float32)
-        target_im2_cnt = imread(cnt_imgs[i]).astype(np.float32)
+        img = imread(imgs[i + 1]).astype(np.float32)
 
-        time_img = imread(cnt_imgs[i + 1]).astype(np.float32)
-        target_im1_time = imread(time_imgs[i + 2]).astype(np.float32)
-        target_im2_time = imread(time_imgs[i]).astype(np.float32)
+        ref_imgs=[]
+        for j in shifts:
+            ref_imgs.append(imread(imgs[i + j]).astype(np.float32))
 
-        h, w = cnt_img.shape
+        h, w, _ = img.shape
 
         if (not args.no_resize) and (h != args.img_height or w != args.img_width):
-            cnt_img = imresize(cnt_img, (args.img_height, args.img_width)).astype(np.float32)
-            target_im1_cnt = imresize(target_im1_cnt, (args.img_height, args.img_width)).astype(np.float32)
-            target_im2_cnt = imresize(target_im2_cnt, (args.img_height, args.img_width)).astype(np.float32)
-            time_img = imresize(time_img, (args.img_height, args.img_width)).astype(np.float32)
-            target_im1_time = imresize(target_im1_time, (args.img_height, args.img_width)).astype(np.float32)
-            target_im2_time = imresize(target_im2_time, (args.img_height, args.img_width)).astype(np.float32)
-
-        img = np.stack([cnt_img, time_img], axis=2)
-        target_im1 = np.stack([target_im1_cnt, target_im1_time], axis=2)
-        target_im2 = np.stack([target_im2_cnt, target_im2_time], axis=2)
-
+            img = imresize(img, (args.img_height, args.img_width)).astype(np.float32)
+            ref_imgs=[imresize(im, (args.img_height, args.img_width)).astype(np.float32) for im in ref_imgs]
 
         with torch.no_grad():
-
             img = np.transpose(img, (2, 0, 1))
-            target_im1 = np.transpose(target_im1, (2, 0, 1))
-            target_im2 = np.transpose(target_im2, (2, 0, 1))
+            ref_imgs = [np.transpose(im, (2, 0, 1)) for im in ref_imgs]
             img = torch.from_numpy(img).unsqueeze(0)
-            tmp = img.mean(1)/255*10
-            target_im1 = torch.from_numpy(target_im1).unsqueeze(0)
-            target_im2 = torch.from_numpy(target_im2).unsqueeze(0)
+            ref_imgs = [torch.from_numpy(im).unsqueeze(0) for im in ref_imgs]
+            img = (img / 255 ).cuda()
+            ref_imgs = [(im / 255 ).cuda() for im in ref_imgs]
 
-            """
-            img = ((img / 255 ) ).cuda()
-            target_im1 = ((target_im1 / 255 )).cuda()
-            target_im2 = ((target_im2 / 255 )).cuda()
-            """
-
-            img = ((img / 255 - 0.5) / 0.5).cuda()
-            target_im1 = ((target_im1 / 255 - 0.5) / 0.5).cuda()
-            target_im2 = ((target_im2 / 255 - 0.5) / 0.5).cuda()
-
-            ref_imgs = [target_im1,target_im2]
 
             output_s= disp_net(img)#,raw_disp
             output_depth = 1 / output_s
@@ -168,16 +139,16 @@ def main():
             if args.pretrained_posenet is not None:
                 explainability_mask, explainability_mask2, pixel_pose, output_m, pose= pose_net(img, ref_imgs)#,raw_disp
 
-            _, ego_flow = get_new_grid(output_depth[0], pose[:,1], intrinsics, intrinsics_inv)
+                _, ego_flow = get_new_grid(output_depth[0], pose[:,1], intrinsics, intrinsics_inv)
 
-            ego_flow = flow_to_image(ego_flow[0].data.cpu().numpy())
+                ego_flow = flow_to_image(ego_flow[0].data.cpu().numpy())
 
-            imsave(output_dir / 'ego_flow_{}{}'.format(file.namebase, file.ext), ego_flow)
+                imsave(output_dir / 'ego_flow_{}{}'.format(file.namebase, file.ext), ego_flow)
 
-            write_flow(ego_flow,output_dir / 'ego_flow_{}{}'.format(file.namebase, '.flo'))
+                write_flow(ego_flow,output_dir / 'ego_flow_{}{}'.format(file.namebase, '.flo'))
+
             output_s=output_s[0].cpu()
             output_depth=output_depth[0,0].cpu()
-
 
             if args.output_disp:
                 disp = (255*tensor2array(output_s, max_value=None, colormap='bone')).astype(np.uint8)
