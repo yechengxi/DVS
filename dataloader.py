@@ -349,7 +349,6 @@ class StackedSequenceFolder(data.Dataset):
             return tgt_img, ref_imgs, intrinsics, np.linalg.inv(intrinsics)
         else:
             depth = np.load(sample['depth']).astype(np.float32)
-            depth=depth[depth.shape[0]//4:-depth.shape[0]//4,:]
             return tgt_img, ref_imgs, intrinsics, np.linalg.inv(intrinsics),depth
 
     def __len__(self):
