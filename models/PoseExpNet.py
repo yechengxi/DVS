@@ -107,6 +107,11 @@ class PoseExpNet(nn.Module):
             exp_mask2 = None
             exp_mask1 = None
 
+        exp2_mask4 = None
+        exp2_mask3 = None
+        exp2_mask2 = None
+        exp2_mask1 = None
+
         if self.output_pixel_pose:
             pose_tmp = pose.view(pose.size(0), -1, 1, 1)
 
@@ -135,12 +140,14 @@ class PoseExpNet(nn.Module):
 
         if self.training:
             exps=[exp_mask1, exp_mask2, exp_mask3, exp_mask4]
+            exps2 = [exp2_mask1, exp2_mask2, exp2_mask3, exp2_mask4]
+
             pixel_poses=[pixel_pose1, pixel_pose2, pixel_pose3, pixel_pose4]
             disps=[disp1, disp2, disp3, disp4]
 
-            return exps,pixel_poses,disps, pose
+            return exps,exps2,pixel_poses,disps, pose
         else:
-            return exp_mask1,pixel_pose1, disp1, pose
+            return exp_mask1,exp2_mask1,pixel_pose1, disp1, pose
 
 
 
