@@ -8,5 +8,5 @@ CUDA_VISIBLE_DEVICES=0,1,2,3 python main.py /vulcan/scratch/cxy/Data/DVS/test/ -
 
 Run inference:
 
-python run_inference.py --img-height 200 --img-width 346 --output-disp --dataset-list outdoor_night1 --dataset-dir /home/cxy/Data/DVS/test/outdoor_night --pretrained-dispnet /home/cxy/Dropbox/Projects/DVS/checkpoints/test,20epochs,seq5,b32,cosine,Adam,lr0.001,m0.1,s0.1,p0.0,o0.0/09-10-19:15/dispnet_model_best.pth.tar --pretrained-posenet /home/cxy/Dropbox/Projects/DVS/checkpoints/test,20epochs,seq5,b32,cosine,Adam,lr0.001,m0.1,s0.1,p0.0,o0.0/09-10-19:15/exp_pose_model_best.pth.tar  --sequence-length 5
+python run_inference.py --img-height 200 --img-width 346 --output-disp --dataset-dir /home/cxy/Data/DVS/MVSEC/outdoor_night_1/eval --pretrained-dispnet /home/cxy/Dropbox/Projects/DVS/checkpoints/MVSEC,50epochs,seq5,b32,cosine,Adam,lr0.001,m0.1,s0.1,p0.0,o0.0/09-11-22:51/dispnet_model_best.pth.tar --pretrained-posenet /home/cxy/Dropbox/Projects/DVS/checkpoints/MVSEC,50epochs,seq5,b32,cosine,Adam,lr0.001,m0.1,s0.1,p0.0,o0.0/09-11-22:51/exp_pose_model_best.pth.tar  --sequence-length 5
 

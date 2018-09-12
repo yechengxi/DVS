@@ -115,20 +115,21 @@ def main():
         file.namebase=os.path.basename(imgs[i + 1]).replace('.jpg','')
         file.ext='.jpg'
 
-        img = imread(imgs[i + 1]).astype(np.float32)
+        img0 = imread(imgs[i + 1]).astype(np.float32)
 
         ref_imgs=[]
         for j in shifts:
             ref_imgs.append(imread(imgs[i + j]).astype(np.float32))
 
-        h, w, _ = img.shape
+        h, w, _ = img0.shape
 
         if (not args.no_resize) and (h != args.img_height or w != args.img_width):
-            img = imresize(img, (args.img_height, args.img_width)).astype(np.float32)
+            img0 = imresize(img0, (args.img_height, args.img_width)).astype(np.float32)
             ref_imgs=[imresize(im, (args.img_height, args.img_width)).astype(np.float32) for im in ref_imgs]
 
         with torch.no_grad():
-            img = np.transpose(img, (2, 0, 1))
+
+            img = np.transpose(img0, (2, 0, 1))
             ref_imgs = [np.transpose(im, (2, 0, 1)) for im in ref_imgs]
             img = torch.from_numpy(img).unsqueeze(0)
             ref_imgs = [torch.from_numpy(im).unsqueeze(0) for im in ref_imgs]
@@ -157,11 +158,11 @@ def main():
                 disp = (255*tensor2array(output_s, max_value=None, colormap='bone')).astype(np.uint8)
                 imsave(output_dir/'disp_{}{}'.format(file.namebase,file.ext), disp)
                 np.save(output_dir/'depth_{}{}'.format(file.namebase,'.npy'),output_depth.data.numpy())
-
-            if args.output_depth:
-                depth = (255*tensor2array(output_depth, max_value=10, colormap='rainbow')).astype(np.uint8)
-                imsave(output_dir/'depth_{}{}'.format(file.namebase,file.ext), depth)
-
+                if args.pretrained_posenet is not None:
+                    cat_im=np.concatenate((img0,disp,ego_flow),axis=1)
+                else:
+                    cat_im=np.concatenate((img0,disp),axis=1)
+                imsave(output_dir / 'cat_{}{}'.format(file.namebase, file.ext), cat_im)
 
 
 if __name__ == '__main__':
