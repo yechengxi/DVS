@@ -86,13 +86,16 @@ def main():
     import os
     import glob
 
-    scene=os.path.join(args.dataset_dir,args.dataset_list)
-    intrinsics = np.genfromtxt(dataset_dir / args.dataset_list+'_cam.txt').astype(np.float32).reshape((3, 3))
+    scene=os.path.join(args.dataset_dir)
+    #intrinsics = np.genfromtxt(dataset_dir / args.dataset_list+'_cam.txt').astype(np.float32).reshape((3, 3))
+    intrinsics = np.genfromtxt(dataset_dir / 'cam.txt').astype(np.float32).reshape((3, 3))
+
     intrinsics_inv = np.linalg.inv(intrinsics)
 
     intrinsics = torch.from_numpy(intrinsics).unsqueeze(0).cuda()
     intrinsics_inv = torch.from_numpy(intrinsics_inv).unsqueeze(0).cuda()
-    imgs = sorted(glob.glob(scene + '_cmb_*.jpg'))
+    #imgs = sorted(glob.glob(scene + '_cmb_*.jpg'))
+    imgs = sorted(glob.glob(os.path.join(scene , '*.jpg')))
 
     print('{} files to test'.format(len(imgs)))
 
@@ -109,7 +112,7 @@ def main():
     for i in range(len(imgs)-args.sequence_length+1):
 
         file =File()
-        file.namebase=os.path.basename(imgs[i + 1]).replace('_cnt','').replace('.jpg','')
+        file.namebase=os.path.basename(imgs[i + 1]).replace('.jpg','')
         file.ext='.jpg'
 
         img = imread(imgs[i + 1]).astype(np.float32)

@@ -13,7 +13,7 @@ from itertools import chain
 from tensorboardX import SummaryWriter
 import models
 
-from dataloader import ImSequenceFolder
+from dataloader import StackedSequenceFolder
 from flowlib import *
 from utils import *
 
@@ -145,7 +145,7 @@ def main():
                                                 normalize])
 
     print("=> fetching scenes in '{}'".format(args.data))
-    train_set = ImSequenceFolder(
+    train_set = StackedSequenceFolder(
         args.data,
         transform=train_transform,
         seed=args.seed,
@@ -155,7 +155,7 @@ def main():
     )
 
     # if no Groundtruth is avalaible, Validation set is the same type as training set to measure photometric loss from warping
-    val_set = ImSequenceFolder(
+    val_set = StackedSequenceFolder(
         args.data,
         transform=valid_transform,
         seed=args.seed,
@@ -166,7 +166,7 @@ def main():
     )
 
     print('{} samples found in {} train scenes'.format(len(train_set), len(train_set.scenes)))
-    #print('{} samples found in {} valid scenes'.format(len(val_set), len(val_set.scenes)))
+    print('{} samples found in {} valid scenes'.format(len(val_set), len(val_set.scenes)))
     train_loader = torch.utils.data.DataLoader(
         train_set, batch_size=args.batch_size, shuffle=True,
         num_workers=args.workers, pin_memory=True)
