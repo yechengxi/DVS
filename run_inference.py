@@ -143,13 +143,14 @@ def main():
             if args.pretrained_posenet is not None:
                 explainability_mask, explainability_mask2, pixel_pose, output_m, pose= pose_net(img, ref_imgs)#,raw_disp
 
-                _, ego_flow = get_new_grid(output_depth[0], pose[:,1], intrinsics, intrinsics_inv)
+                _, ego_flow = get_new_grid(output_depth[0], pose[:,int((args.sequence_length-1)/2)], intrinsics, intrinsics_inv)
 
-                ego_flow = flow_to_image(ego_flow[0].data.cpu().numpy())
-
+                ego_flow=ego_flow[0].data.cpu().numpy()
+                write_flow(ego_flow,output_dir / 'ego_flow_{}{}'.format(file.namebase, '.flo'))
+                #tmp=read_flow(output_dir / 'ego_flow_{}{}'.format(file.namebase, '.flo'))
+                ego_flow = flow_to_image(ego_flow)
                 imsave(output_dir / 'ego_flow_{}{}'.format(file.namebase, file.ext), ego_flow)
 
-                write_flow(ego_flow,output_dir / 'ego_flow_{}{}'.format(file.namebase, '.flo'))
 
             output_s=output_s[0].cpu()
             output_depth=output_depth[0,0].cpu()
