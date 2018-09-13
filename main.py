@@ -13,7 +13,7 @@ from itertools import chain
 from tensorboardX import SummaryWriter
 import models
 
-from dataloader import StackedSequenceFolder
+from dataloader import *
 from flowlib import *
 from utils import *
 
@@ -131,21 +131,24 @@ def main():
             output_writers.append(SummaryWriter(args.save_path/'valid'/str(i)))
 
     # Data loading code
-    normalize = custom_transforms.Normalize(mean=[0, 0, 0],
-                                            std=[1,1,1])
-    train_transform = custom_transforms.Compose([#custom_transforms.CropBottom(),
+    normalize = custom_transforms.Normalize(mean=[0.5, 0.5, 0.5],std=[.5,.5,.5])
+    #normalize = custom_transforms.Normalize(mean=[0.5, 0.5],std=[.5,.5])
+
+    train_transform = custom_transforms.Compose([custom_transforms.CropBottom(),
         custom_transforms.RandomHorizontalFlip(),
         custom_transforms.RandomScaleCrop(),
         custom_transforms.ArrayToTensor(),
         normalize
     ])
 
-    valid_transform = custom_transforms.Compose([#custom_transforms.CropBottom(),
+    valid_transform = custom_transforms.Compose([custom_transforms.CropBottom(),
                                                  custom_transforms.ArrayToTensor(),
-                                                normalize])
+                                                normalize
+                                                ])
 
     print("=> fetching scenes in '{}'".format(args.data))
     train_set = StackedSequenceFolder(
+    #train_set = SequenceFolder(
         args.data,
         transform=train_transform,
         seed=args.seed,
@@ -156,6 +159,7 @@ def main():
 
     # if no Groundtruth is avalaible, Validation set is the same type as training set to measure photometric loss from warping
     val_set = StackedSequenceFolder(
+    #val_set = SequenceFolder(
         args.data,
         transform=valid_transform,
         seed=args.seed,
@@ -395,9 +399,9 @@ def train(args, train_loader, disp_net, pose_exp_net, optimizer, epoch_size,  tr
             loss_2 = 0
 
         if w3 > 0:
-            #loss_3 = args.smooth_loss(depth)#args.smooth_loss(depth)
+            loss_3 = args.smooth_loss(depth)#args.smooth_loss(depth)
             #loss_3 = args.joint_smooth_loss(depth,depth[0])  # args.smooth_loss(depth)
-            loss_3 = args.non_local_smooth_loss(depth)
+            #loss_3 = args.non_local_smooth_loss(depth)
             #if args.multi:
             #    loss_3 += args.smooth_loss(depth_m)#args.smooth_loss(depth_m)
             loss_3=loss_3.mean()
@@ -456,8 +460,11 @@ def train(args, train_loader, disp_net, pose_exp_net, optimizer, epoch_size,  tr
         if args.training_output_freq > 0 and n_iter % args.training_output_freq == 0:
             #print(pose.abs().view(pose.shape[0],2,6).mean(0).mean(0).data.cpu().numpy())
             #print('p',pixel_pose[0].view(pose.shape[0],12,-1).abs().mean(0).mean(1).view(2,6).mean(0).data.cpu().numpy())
-            train_writer.add_image('train Input', tensor2array(tgt_img[0],max_value=1,colormap='bone'), n_iter)
 
+            if tgt_img.shape[1]==3:
+                train_writer.add_image('train Input', tensor2array(tgt_img[0],max_value=1,colormap='bone'), n_iter)
+            else:
+                train_writer.add_image('train Input', tensor2array(tgt_img[0,0], max_value=.1, colormap='bone'), n_iter)
 
 
             for k,scaled_depth in enumerate(depth):
@@ -529,9 +536,9 @@ def train(args, train_loader, disp_net, pose_exp_net, optimizer, epoch_size,  tr
                         train_writer.add_image('residual flow {} {}'.format(k, j), residual_flow / 255, n_iter)
 
                     ref_warped = ref_warped[0]
-
-                    train_writer.add_image('train Warped Outputs {} {}'.format(k,j), tensor2array(ref_warped.data.cpu(),colormap='bone',max_value=1), n_iter)
-                    train_writer.add_image('train Diff Outputs {} {}'.format(k,j), tensor2array(0.5*(tgt_img_scaled[0] - ref_warped).abs().data.cpu(),colormap='bone',max_value=1.), n_iter)
+                    if ref_warped.shape[1]==3:
+                        train_writer.add_image('train Warped Outputs {} {}'.format(k,j), tensor2array(ref_warped.data.cpu(),colormap='bone',max_value=1), n_iter)
+                        train_writer.add_image('train Diff Outputs {} {}'.format(k,j), tensor2array(0.5*(tgt_img_scaled[0] - ref_warped).abs().data.cpu(),colormap='bone',max_value=1.), n_iter)
 
 
 
@@ -629,9 +636,16 @@ def validate_without_gt(args, val_loader, disp_net, pose_exp_net, epoch, output_
             if log_outputs and i % 100 == 0 and i/100 < len(output_writers):  # log first output of every 100 batch
                 index = int(i//100)
                 if epoch == 0:
-                    for j,ref in enumerate(ref_imgs):
-                        output_writers[index].add_image('val Input {}'.format(j), tensor2array(tgt_img[0],colormap='bone',max_value=1), 0)
-                        output_writers[index].add_image('val Input {}'.format(j), tensor2array(ref[0],colormap='bone',max_value=1), 1)
+                    if tgt_img.shape[1]==3:
+                        for j,ref in enumerate(ref_imgs):
+                            output_writers[index].add_image('val Input {}'.format(j), tensor2array(tgt_img[0],colormap='bone',max_value=1), 0)
+                            output_writers[index].add_image('val Input {}'.format(j), tensor2array(ref[0],colormap='bone',max_value=1), 1)
+                    else:
+                        for j, ref in enumerate(ref_imgs):
+                            output_writers[index].add_image('val Input {}'.format(j),
+                                                            tensor2array(tgt_img[0,0], colormap='bone', max_value=.1), 0)
+                            output_writers[index].add_image('val Input {}'.format(j),
+                                                            tensor2array(ref[0,0], colormap='bone', max_value=.1), 1)
 
                 output_writers[index].add_image('val Dispnet Output Normalized', tensor2array(disp.data[0].cpu(), max_value=None, colormap='bone'), epoch)
                 output_writers[index].add_image('val Depth Output Normalized', tensor2array(1./disp.data[0].cpu(), max_value=None), epoch)
@@ -656,9 +670,9 @@ def validate_without_gt(args, val_loader, disp_net, pose_exp_net, epoch, output_
                                                                   padding_mode=args.padding_mode)
                         flow = flow[0]
                         ref_warped = ref_warped[0]
-
-                        output_writers[index].add_image('val Warped Outputs {}'.format(j), tensor2array(ref_warped.data.cpu(),colormap='bone',max_value=1), n_iter)
-                        output_writers[index].add_image('val Diff Outputs {}'.format(j), tensor2array(0.5*(tgt_img_var[0] - ref_warped).abs().data.cpu(),colormap='bone',max_value=1), n_iter)
+                        if ref_warped.shape[1]==3:
+                            output_writers[index].add_image('val Warped Outputs {}'.format(j), tensor2array(ref_warped.data.cpu(),colormap='bone',max_value=1), n_iter)
+                            output_writers[index].add_image('val Diff Outputs {}'.format(j), tensor2array(0.5*(tgt_img_var[0] - ref_warped).abs().data.cpu(),colormap='bone',max_value=1), n_iter)
 
 
             if log_outputs and i < len(val_loader)-1:
@@ -765,7 +779,12 @@ def validate_with_gt(args, val_loader, disp_net, pose_exp_net, epoch, output_wri
             if log_outputs and i % log_freq == 0 and i/log_freq < len(output_writers):
                 index = int(i//log_freq)
                 if epoch == 0:
-                    output_writers[index].add_image('val Input', tensor2array(tgt_img[0],colormap='bone',max_value=1), 0)
+                    if tgt_img.shape[1]==3:
+                        output_writers[index].add_image('val Input', tensor2array(tgt_img[0],colormap='bone',max_value=1), 0)
+                    else:
+                        output_writers[index].add_image('val Input',
+                                                        tensor2array(tgt_img[0,0], colormap='bone', max_value=.1), 0)
+
                     depth_to_show = depth[0].cpu()
                     output_writers[index].add_image('val target Depth', tensor2array(depth_to_show, max_value=10), epoch)
                     depth_to_show[depth_to_show == 0] = 1000
@@ -847,7 +866,11 @@ def validate_on_kitti(args, val_loader, disp_net, pose_exp_net, epoch, output_wr
             if log_outputs and i % log_freq == 0 and i / log_freq < len(output_writers):
                 index = int(i // log_freq)
                 if epoch == 0:
-                    output_writers[index].add_image('val Input', tensor2array(tgt_img[0]), 0)
+                    if tgt_img.shape[1]==3:
+                        output_writers[index].add_image('val Input', tensor2array(tgt_img[0]), 0)
+                    else:
+                        output_writers[index].add_image('val Input', tensor2array(tgt_img[0,0]), 0)
+
                     depth_to_show = depth[0].cpu()
                     output_writers[index].add_image('val target Depth', tensor2array(depth_to_show, max_value=10),
                                                     epoch)
