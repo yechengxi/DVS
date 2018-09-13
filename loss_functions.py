@@ -253,8 +253,9 @@ class non_local_smooth_loss(nn.Module):
             dx2, dxdy = gradient(dx)
             dydx, dy2 = gradient(dy)
             #loss += (dx2.abs().view(N,-1).mean(1) + dxdy.abs().view(N,-1).mean(1) + dydx.abs().view(N,-1).mean(1) + dy2.abs().view(N,-1).mean(1))*weight
-            loss += JointSmoothnessLoss(dx2,dx2).view(N, -1).mean(1)+JointSmoothnessLoss(dxdy,dxdy).view(N, -1).mean(1)+JointSmoothnessLoss(dy2,dy2).view(N, -1).mean(1)+JointSmoothnessLoss(dydx,dydx).view(N, -1).mean(1)
-
+            #loss += JointSmoothnessLoss(dx2,dx2).view(N, -1).mean(1)+JointSmoothnessLoss(dxdy,dxdy).view(N, -1).mean(1)+JointSmoothnessLoss(dy2,dy2).view(N, -1).mean(1)+JointSmoothnessLoss(dydx,dydx).view(N, -1).mean(1)
+            dd=torch.cat((dx2[:,:,1:-1,:],dy2[:,:,:,1:-1],dxdy[:,:,:-1,:-1],dydx[:,:,:-1,:-1]),dim=1)
+            loss+=NonLocalSmoothnessLoss(dd,p=0.8,eps=1e-4, R=0.1, B=10)
             weight /= 2.3 # don't ask me why it works better
 
         return loss
@@ -291,43 +292,21 @@ def pose_smooth_loss(pred_map,pose_ego):
 
 
 
-def SimpleJointLoss(I,J,p=1,eps=1e-2):
+def SimpleSmoothnessLoss(I,p=1,eps=1e-2):
     loss=0.
-    #J=torch.mean(J.detach(),dim=1,keepdim=True)
     N, C, H, W= I.shape
 
-    W1=torch.pow(torch.abs(J[:, :, 2:, 1:-1] - J[:, :, 1:-1, 1:-1])+ eps, p-2)
-    I1=(J[:, :, 2:, 1:-1] - I[:, :, 1:-1, 1:-1]) ** 2
-    W2=torch.pow(torch.abs(J[:, :, 1:-1, 2:] - J[:, :, 1:-1, 1:-1])+ eps,p-2)
-    I2=(J[:, :, 1:-1, 2:] - I[:, :, 1:-1, 1:-1]) ** 2
-    W3=torch.pow(torch.abs(J[:, :, :-2, 1:-1] - J[:, :, 1:-1, 1:-1]) + eps, p - 2)
-    I3=(J[:, :, :-2, 1:-1] - I[:, :, 1:-1, 1:-1]) ** 2
-    W4=torch.pow(torch.abs(J[:, :, 1:-1, :-2] - J[:, :, 1:-1, 1:-1]) + eps, p - 2)
-    I4=(J[:, :, 1:-1, :-2] - I[:, :, 1:-1, 1:-1]) ** 2
-    loss=(W1*I1+W2*I2+W3*I3+W4*I4)/(W1+W2+W3+W4)
-    return loss
-
-
-
-
-def SimpleJointSmoothnessLoss(I,J,p=1,eps=1e-2):
-    loss=0.
-    J=torch.mean(J.detach(),dim=1,keepdim=True)
-    N, C, H, W= I.shape
-
-    W1=torch.pow(torch.abs(J[:, :, 2:, 1:-1] - J[:, :, 1:-1, 1:-1])+ eps, p-2)
+    W1=torch.pow(torch.abs(I[:, :, 2:, 1:-1] - I[:, :, 1:-1, 1:-1])+ eps, p-2)
     I1=(I[:, :, 2:, 1:-1] - I[:, :, 1:-1, 1:-1]) ** 2
-    W2=torch.pow(torch.abs(J[:, :, 1:-1, 2:] - J[:, :, 1:-1, 1:-1])+ eps,p-2)
+    W2=torch.pow(torch.abs(I[:, :, 1:-1, 2:] - I[:, :, 1:-1, 1:-1])+ eps,p-2)
     I2=(I[:, :, 1:-1, 2:] - I[:, :, 1:-1, 1:-1]) ** 2
-    W3=torch.pow(torch.abs(J[:, :, :-2, 1:-1] - J[:, :, 1:-1, 1:-1]) + eps, p - 2)
+    W3=torch.pow(torch.abs(I[:, :, :-2, 1:-1] - I[:, :, 1:-1, 1:-1]) + eps, p - 2)
     I3=(I[:, :, :-2, 1:-1] - I[:, :, 1:-1, 1:-1]) ** 2
-    W4=torch.pow(torch.abs(J[:, :, 1:-1, :-2] - J[:, :, 1:-1, 1:-1]) + eps, p - 2)
+    W4=torch.pow(torch.abs(I[:, :, 1:-1, :-2] - I[:, :, 1:-1, 1:-1]) + eps, p - 2)
     I4=(I[:, :, 1:-1, :-2] - I[:, :, 1:-1, 1:-1]) ** 2
     loss=(W1*I1+W2*I2+W3*I3+W4*I4)/(W1+W2+W3+W4)
     loss = torch.mean(loss.view(N,-1),1)
     return loss
-
-
 
 
 def box_filter(tensor,R):
@@ -338,26 +317,29 @@ def box_filter(tensor,R):
     slidesum=torch.cat((cumsum[:, :, :, R:2 * R + 1],cumsum[:, :, :, 2 * R + 1:W] - cumsum[:, :, :, 0:W - 2 * R - 1],cumsum[:, :, :, -1:] - cumsum[:, :, :, W - 2 * R - 1:W - R - 1]),dim=3)
     return slidesum
 
-def JointSmoothnessLoss(I, J,p=1,eps=1e-4, R=0.1, B=10 ):
+
+
+
+def NonLocalSmoothnessLoss(I, p=1.0,eps=1e-4, R=0.1, B=10 ):
 
     N, C, H, W = I.shape
 
     R=int(min(H,W)*R)
     if H<10 or W<10 or R<2:
-        return SimpleJointSmoothnessLoss(I,J,p,eps)
+        return SimpleSmoothnessLoss(I,p,eps)
 
     loss = 0.
 
-    J=torch.mean(J.detach(),dim=1,keepdim=True)
+    J=I
 
-    min_J, _ = torch.min(J.view(N, 1, -1), dim=2)
-    max_J, _ = torch.max(J.view(N, 1, -1), dim=2)
-    min_J = min_J.view(N, 1, 1, 1, 1)
-    max_J = max_J.view(N, 1, 1, 1, 1)
+    min_J, _ = torch.min(J.view(N, C, -1), dim=2)
+    max_J, _ = torch.max(J.view(N, C, -1), dim=2)
+    min_J = min_J.view(N, C, 1, 1, 1)
+    max_J = max_J.view(N, C, 1, 1, 1)
     Q = torch.from_numpy(np.linspace(0.0, 1.0, B + 1)).type_as(min_J).view(1, 1, 1, 1, B + 1)
     Q = Q * (max_J - min_J + 1e-5) + min_J
-    min_J = min_J.view(N, 1, 1, 1)
-    max_J = max_J.view(N, 1, 1, 1)
+    min_J = min_J.view(N, C, 1, 1)
+    max_J = max_J.view(N, C, 1, 1)
     Bin1 = torch.floor((J - min_J) / (max_J - min_J + 1e-5) * B).long()
     Bin2 = torch.ceil((J - min_J) / (max_J - min_J + 1e-5) * B).long()
 
@@ -398,30 +380,6 @@ def JointSmoothnessLoss(I, J,p=1,eps=1e-4, R=0.1, B=10 ):
     loss = torch.mean((loss / W_sum).view(N,-1),1)
 
     return loss
-
-
-
-class joint_smooth_loss(nn.Module):
-    def __init__(self):
-        super(joint_smooth_loss, self).__init__()
-
-    def forward(self, pred_map,joint_img,p=1.0,eps=1e-3):
-
-        if type(pred_map) not in [tuple, list]:
-            pred_map = [pred_map]
-
-        loss=0
-        weight=0
-
-        for scaled_map in pred_map:
-            B,_,H,W=scaled_map.shape
-            if H>3 and W>3:
-                scaled_joint_img=F.adaptive_avg_pool2d(joint_img,(H,W))
-                #loss = loss + H * W * SimpleJointSmoothnessLoss(scaled_map, scaled_joint_img, p, eps)
-                loss = loss + H * W * JointSmoothnessLoss(scaled_map, scaled_joint_img, p, eps)
-                weight=weight+H*W
-        loss=loss/weight
-        return loss
 
 
 
