@@ -202,7 +202,7 @@ class smooth_loss(nn.Module):
     def __init__(self):
         super(smooth_loss, self).__init__()
 
-    def forward(self, pred_map,p=.5,eps=1e-5):
+    def forward(self, pred_map,p=1,eps=1e-4):
         def gradient(pred):
             D_dy = pred[:, :, 1:] - pred[:, :, :-1]
             D_dx = pred[:, :, :, 1:] - pred[:, :, :, :-1]
