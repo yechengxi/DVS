@@ -509,24 +509,26 @@ def train(args, train_loader, disp_net, pose_exp_net, optimizer, epoch_size,  tr
                         else:
                             current_pose = pose[:1, j]
 
-                        if ego_flows is not None:
-                            ego_flow = flow_to_image(ego_flows[k][j][0].data.cpu().numpy())
-                            train_writer.add_image('ego flow {} {}'.format(k,j), ego_flow / 255, n_iter)
-                        if rigid_flows is not None:
-                            rigid_flow = flow_to_image(rigid_flows[k][j][0].data.cpu().numpy())
-                            train_writer.add_image('rigid flow {} {}'.format(k,j), rigid_flow / 255,n_iter)
-
-                            residual_flow = flow_to_image((rigid_flows[k][j][0]-ego_flows[k][j][0]).data.cpu().numpy())
-                            train_writer.add_image('residual flow {} {}'.format(k, j), residual_flow / 255, n_iter)
 
                         ref_warped, _, flow = simple_inverse_warp(ref, scaled_depth[:, 0], current_pose,
                                                                   intrinsics_scaled, intrinsics_scaled_inv,
                                                                   padding_mode=args.padding_mode)
                         flow = flow[0]
-                        ref_warped = ref_warped[0]
 
-                        train_writer.add_image('train Warped Outputs {} {}'.format(k,j), tensor2array(ref_warped.data.cpu(),colormap='bone',max_value=1), n_iter)
-                        train_writer.add_image('train Diff Outputs {} {}'.format(k,j), tensor2array(0.5*(tgt_img_scaled[0] - ref_warped).abs().data.cpu(),colormap='bone',max_value=1.), n_iter)
+                    if ego_flows is not None:
+                        ego_flow = flow_to_image(ego_flows[k][j][0].data.cpu().numpy())
+                        train_writer.add_image('ego flow {} {}'.format(k,j), ego_flow / 255, n_iter)
+                    if rigid_flows is not None:
+                        rigid_flow = flow_to_image(rigid_flows[k][j][0].data.cpu().numpy())
+                        train_writer.add_image('rigid flow {} {}'.format(k,j), rigid_flow / 255,n_iter)
+
+                        residual_flow = flow_to_image((rigid_flows[k][j][0]-ego_flows[k][j][0]).data.cpu().numpy())
+                        train_writer.add_image('residual flow {} {}'.format(k, j), residual_flow / 255, n_iter)
+
+                    ref_warped = ref_warped[0]
+
+                    train_writer.add_image('train Warped Outputs {} {}'.format(k,j), tensor2array(ref_warped.data.cpu(),colormap='bone',max_value=1), n_iter)
+                    train_writer.add_image('train Diff Outputs {} {}'.format(k,j), tensor2array(0.5*(tgt_img_scaled[0] - ref_warped).abs().data.cpu(),colormap='bone',max_value=1.), n_iter)
 
 
 
