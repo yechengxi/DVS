@@ -230,6 +230,38 @@ class smooth_loss(nn.Module):
         return loss
 
 
+
+class non_local_smooth_loss(nn.Module):
+    def __init__(self):
+        super(non_local_smooth_loss, self).__init__()
+
+    def forward(self, pred_map,p=.5,eps=1e-4):
+        def gradient(pred):
+            D_dy = pred[:, :, 1:] - pred[:, :, :-1]
+            D_dx = pred[:, :, :, 1:] - pred[:, :, :, :-1]
+            return D_dx, D_dy
+
+        if type(pred_map) not in [tuple, list]:
+            pred_map = [pred_map]
+
+        loss = 0
+        weight = 1.
+
+        for scaled_map in pred_map:
+            N = scaled_map.shape[0]
+            dx, dy = gradient(scaled_map)
+            dx2, dxdy = gradient(dx)
+            dydx, dy2 = gradient(dy)
+            #loss += (dx2.abs().view(N,-1).mean(1) + dxdy.abs().view(N,-1).mean(1) + dydx.abs().view(N,-1).mean(1) + dy2.abs().view(N,-1).mean(1))*weight
+            loss += JointSmoothnessLoss(dx2,dx2).view(N, -1).mean(1)+JointSmoothnessLoss(dxdy,dxdy).view(N, -1).mean(1)+JointSmoothnessLoss(dy2,dy2).view(N, -1).mean(1)+JointSmoothnessLoss(dydx,dydx).view(N, -1).mean(1)
+
+            weight /= 2.3 # don't ask me why it works better
+
+        return loss
+
+
+
+
 def pose_smooth_loss(pred_map,pose_ego):
     def gradient(pred):
         D_dy = pred[:, :, 1:] - pred[:, :, :-1]
@@ -306,7 +338,7 @@ def box_filter(tensor,R):
     slidesum=torch.cat((cumsum[:, :, :, R:2 * R + 1],cumsum[:, :, :, 2 * R + 1:W] - cumsum[:, :, :, 0:W - 2 * R - 1],cumsum[:, :, :, -1:] - cumsum[:, :, :, W - 2 * R - 1:W - R - 1]),dim=3)
     return slidesum
 
-def JointSmoothnessLoss(I, J,p=1,eps=1e-2, R=0.1, B=10 ):
+def JointSmoothnessLoss(I, J,p=1,eps=1e-4, R=0.1, B=10 ):
 
     N, C, H, W = I.shape
 
@@ -385,8 +417,8 @@ class joint_smooth_loss(nn.Module):
             B,_,H,W=scaled_map.shape
             if H>3 and W>3:
                 scaled_joint_img=F.adaptive_avg_pool2d(joint_img,(H,W))
-                loss = loss + H * W * SimpleJointSmoothnessLoss(scaled_map, scaled_joint_img, p, eps)
-                #loss = loss + H * W * JointSmoothnessLoss(scaled_map, scaled_joint_img, p, eps)
+                #loss = loss + H * W * SimpleJointSmoothnessLoss(scaled_map, scaled_joint_img, p, eps)
+                loss = loss + H * W * JointSmoothnessLoss(scaled_map, scaled_joint_img, p, eps)
                 weight=weight+H*W
         loss=loss/weight
         return loss
