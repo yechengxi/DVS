@@ -73,6 +73,7 @@ parser.add_argument('--log-full', default='progress_log_full.csv', metavar='PATH
 parser.add_argument('--photo-loss-weight', type=float, help='weight for photometric loss', metavar='W', default=1)
 parser.add_argument('-m', '--mask-loss-weight', type=float, help='weight for explainabilty mask loss', metavar='W', default=0)
 parser.add_argument('--still-loss-weight', type=float, help='weight for still mask loss', metavar='W', default=0.0)
+parser.add_argument('--nls', action='store_true', help='use non-local smoothness')
 parser.add_argument('-s', '--smooth-loss-weight', type=float, help='weight for disparity smoothness loss', metavar='W', default=0.1)
 parser.add_argument('-p','--pose-smooth-loss-weight', type=float, help='weight for pose smoothness loss', metavar='W', default=0.)
 parser.add_argument('-c','--consistency-loss-weight', type=float, help='weight for consistency loss', metavar='W', default=0.1)
@@ -399,12 +400,13 @@ def train(args, train_loader, disp_net, pose_exp_net, optimizer, epoch_size,  tr
             loss_2 = 0
 
         if w3 > 0:
-            #loss_3 = args.smooth_loss(depth)#args.smooth_loss(depth)
-            #loss_3 = args.joint_smooth_loss(depth,depth[0])  # args.smooth_loss(depth)
-            loss_3 = args.non_local_smooth_loss(depth)
-            #if args.multi:
-            #    loss_3 += args.smooth_loss(depth_m)#args.smooth_loss(depth_m)
+            if args.nls:
+                loss_3 = args.non_local_smooth_loss(depth)
+            else:
+                loss_3 = args.smooth_loss(depth)#args.smooth_loss(depth)
+
             loss_3=loss_3.mean()
+
         else:
             loss_3=0.
 
