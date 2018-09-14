@@ -131,19 +131,19 @@ def main():
             output_writers.append(SummaryWriter(args.save_path/'valid'/str(i)))
 
     # Data loading code
-    normalize = custom_transforms.Normalize(mean=[0.5, 0.5, 0.5],std=[.5,.5,.5])
+    #normalize = custom_transforms.Normalize(mean=[0.5, 0.5, 0.5],std=[.5,.5,.5])
     #normalize = custom_transforms.Normalize(mean=[0.5, 0.5],std=[.5,.5])
 
-    train_transform = custom_transforms.Compose([custom_transforms.CropBottom(),
+    train_transform = custom_transforms.Compose([#custom_transforms.CropBottom(),
         custom_transforms.RandomHorizontalFlip(),
         custom_transforms.RandomScaleCrop(),
         custom_transforms.ArrayToTensor(),
-        normalize
+        #normalize
     ])
 
-    valid_transform = custom_transforms.Compose([custom_transforms.CropBottom(),
+    valid_transform = custom_transforms.Compose([#custom_transforms.CropBottom(),
                                                  custom_transforms.ArrayToTensor(),
-                                                normalize
+                                                #normalize
                                                 ])
 
     print("=> fetching scenes in '{}'".format(args.data))
@@ -399,9 +399,9 @@ def train(args, train_loader, disp_net, pose_exp_net, optimizer, epoch_size,  tr
             loss_2 = 0
 
         if w3 > 0:
-            loss_3 = args.smooth_loss(depth)#args.smooth_loss(depth)
+            #loss_3 = args.smooth_loss(depth)#args.smooth_loss(depth)
             #loss_3 = args.joint_smooth_loss(depth,depth[0])  # args.smooth_loss(depth)
-            #loss_3 = args.non_local_smooth_loss(depth)
+            loss_3 = args.non_local_smooth_loss(depth)
             #if args.multi:
             #    loss_3 += args.smooth_loss(depth_m)#args.smooth_loss(depth_m)
             loss_3=loss_3.mean()
