@@ -202,7 +202,7 @@ class smooth_loss(nn.Module):
     def __init__(self):
         super(smooth_loss, self).__init__()
 
-    def forward(self, pred_map,p=1,eps=1e-4):
+    def forward(self, pred_map,p=.5,eps=1e-4):
         def gradient(pred):
             D_dy = pred[:, :, 1:] - pred[:, :, :-1]
             D_dx = pred[:, :, :, 1:] - pred[:, :, :, :-1]
@@ -219,11 +219,11 @@ class smooth_loss(nn.Module):
             dx, dy = gradient(scaled_map)
             dx2, dxdy = gradient(dx)
             dydx, dy2 = gradient(dy)
-            loss += (dx2.abs().view(N,-1).mean(1) + dxdy.abs().view(N,-1).mean(1) + dydx.abs().view(N,-1).mean(1) + dy2.abs().view(N,-1).mean(1))*weight
-            #loss += (torch.pow(torch.clamp(dx2.abs(), min=eps),p).view(N, -1).mean(1)
-            #         + torch.pow(torch.clamp(dxdy.abs(), min=eps),p).view(N, -1).mean(1)
-            #            + torch.pow(torch.clamp(dydx.abs(), min=eps),p).view(N, -1).mean(1)
-            #               + torch.pow(torch.clamp(dy2.abs(), min=eps),p).view(N, -1).mean(1)) * weight
+            #loss += (dx2.abs().view(N,-1).mean(1) + dxdy.abs().view(N,-1).mean(1) + dydx.abs().view(N,-1).mean(1) + dy2.abs().view(N,-1).mean(1))*weight
+            loss += (torch.pow(torch.clamp(dx2.abs(), min=eps),p).view(N, -1).mean(1)
+                     + torch.pow(torch.clamp(dxdy.abs(), min=eps),p).view(N, -1).mean(1)
+                        + torch.pow(torch.clamp(dydx.abs(), min=eps),p).view(N, -1).mean(1)
+                           + torch.pow(torch.clamp(dy2.abs(), min=eps),p).view(N, -1).mean(1)) * weight
 
             weight /= 2.3 # don't ask me why it works better
 
