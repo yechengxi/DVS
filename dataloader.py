@@ -294,7 +294,7 @@ class StackedSequenceFolder(data.Dataset):
             intrinsics=np.asarray(l[:3]).astype(np.float32)
             imgs=sorted(glob.glob(os.path.join(scene, '*.jpg')))
             
-            
+
             split = int(len(imgs) * .8)
             if self.train:
                 imgs=imgs[:split]
