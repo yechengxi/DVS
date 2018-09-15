@@ -294,13 +294,13 @@ class StackedSequenceFolder(data.Dataset):
             intrinsics=np.asarray(l[:3]).astype(np.float32)
             imgs=sorted(glob.glob(os.path.join(scene, '*.jpg')))
             
-            """
+            
             split = int(len(imgs) * .8)
             if self.train:
                 imgs=imgs[:split]
             else:
                 imgs=imgs[split:]
-            """
+
             self.depths=[img.replace('frame','depth').replace('.jpg','.npy') for img in imgs]
 
             if len(imgs) < sequence_length:
