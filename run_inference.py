@@ -143,7 +143,11 @@ def main():
             if args.pretrained_posenet is not None:
                 explainability_mask, explainability_mask2, pixel_pose, output_m, pose= pose_net(img, ref_imgs)#,raw_disp
 
-                _, ego_flow = get_new_grid(output_depth[0], pose[:,int((args.sequence_length-1)/2)], intrinsics, intrinsics_inv)
+                if args.arch=='ecn':
+                    _, ego_flow = get_new_grid(output_depth[0], pose[:,int((args.sequence_length-1)/2)], intrinsics, intrinsics_inv)
+                else:
+                    _, ego_flow = inverse_warp(ref_imgs[((args.sequence_length-1)/2)], output_depth[:, 0], pose[:,int((args.sequence_length-1)/2)], intrinsics,
+                                               intrinsics_inv, 'euler', 'zeros')
 
                 ego_flow=ego_flow[0].data.cpu().numpy()
                 write_flow(ego_flow,output_dir / 'ego_flow_{}{}'.format(file.namebase, '.flo'))
