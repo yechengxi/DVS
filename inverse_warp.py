@@ -179,11 +179,16 @@ def inverse_warp(img, depth, pose, intrinsics, intrinsics_inv, rotation_mode='eu
     b,c,h,w=img.shape
     i_range = torch.arange(0, h, dtype=depth.dtype, device=depth.device, requires_grad=False).view(1, h, 1).expand(1, h, w)  # [1, H, W]
     j_range = torch.arange(0, w, dtype=depth.dtype, device=depth.device, requires_grad=False).view(1, 1, w).expand(1, h, w)  # [1, H, W]
-    ones = torch.ones(1, h, w, dtype=depth.dtype, device=depth.device, requires_grad=False)
-    pixel_coords = torch.stack((j_range, i_range, ones), dim=1)  # [1, 3, H, W]
+    i_range = 2 * i_range / (h - 1) - 1
+    j_range=2*j_range/(w-1)-1
 
-    flow=(src_pixel_coords-pixel_coords[:,:2].permute(0,2,3,1))
+    pixel_coords = torch.stack((j_range, i_range), dim=1)  # [1, 3, H, W]
 
+
+    flow=(src_pixel_coords-pixel_coords.permute(0,2,3,1))/2
+    flow=torch.stack((flow[...,0]*(h-1),flow[...,1]*(w-1)),dim=3)
+    #flow[flow>=2*(h-1)]=0
+    #flow[flow >= 2*(w-1)]=0
     return projected_img,flow
 
 

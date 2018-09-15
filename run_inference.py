@@ -147,7 +147,7 @@ def main():
                     _, ego_flow = get_new_grid(output_depth[0], pose[:,int((args.sequence_length-1)/2)], intrinsics, intrinsics_inv)
                 else:
                     _, ego_flow = inverse_warp(ref_imgs[int((args.sequence_length-1)/2)], output_depth[:, 0], pose[:,int((args.sequence_length-1)/2)], intrinsics,
-                                               intrinsics_inv, 'euler', 'zeros')
+                                               intrinsics_inv, 'euler', 'border')
 
                 ego_flow=ego_flow[0].data.cpu().numpy()
                 write_flow(ego_flow,output_dir / 'ego_flow_{}{}'.format(file.namebase, '.flo'))
