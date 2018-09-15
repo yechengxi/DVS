@@ -146,7 +146,7 @@ def main():
                 if args.arch=='ecn':
                     _, ego_flow = get_new_grid(output_depth[0], pose[:,int((args.sequence_length-1)/2)], intrinsics, intrinsics_inv)
                 else:
-                    _, ego_flow = inverse_warp(ref_imgs[((args.sequence_length-1)/2)], output_depth[:, 0], pose[:,int((args.sequence_length-1)/2)], intrinsics,
+                    _, ego_flow = inverse_warp(ref_imgs[int((args.sequence_length-1)/2)], output_depth[:, 0], pose[:,int((args.sequence_length-1)/2)], intrinsics,
                                                intrinsics_inv, 'euler', 'zeros')
 
                 ego_flow=ego_flow[0].data.cpu().numpy()
