@@ -85,6 +85,7 @@ def main():
 
     import os
     import glob
+    import time
 
     scene=os.path.join(args.dataset_dir)
     #intrinsics = np.genfromtxt(dataset_dir / args.dataset_list+'_cam.txt').astype(np.float32).reshape((3, 3))
@@ -109,23 +110,24 @@ def main():
     shifts = list(range(-demi_length, demi_length + 1))
     shifts.pop(demi_length)
 
-    for i in range(len(imgs)-args.sequence_length+1):
+    for i in range(demi_length,len(imgs)-demi_length):
 
         file =File()
-        file.namebase=os.path.basename(imgs[i + 1]).replace('.jpg','')
+        file.namebase=os.path.basename(imgs[i]).replace('.jpg','')
         file.ext='.jpg'
 
-        img0 = imread(imgs[i + 1]).astype(np.float32)
+        img0 = imread(imgs[i]).astype(np.float32)
 
         ref_imgs=[]
         for j in shifts:
             ref_imgs.append(imread(imgs[i + j]).astype(np.float32))
 
-        h, w, _ = img0.shape
 
         if (not args.no_resize) and (h != args.img_height or w != args.img_width):
             img0 = imresize(img0, (args.img_height, args.img_width)).astype(np.float32)
             ref_imgs=[imresize(im, (args.img_height, args.img_width)).astype(np.float32) for im in ref_imgs]
+
+        h, w, _ = img0.shape
 
         with torch.no_grad():
 
@@ -138,6 +140,7 @@ def main():
 
 
             output_s= disp_net(img)#,raw_disp
+
             output_depth = 1 / output_s
 
             if args.pretrained_posenet is not None:
