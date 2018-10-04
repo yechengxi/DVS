@@ -122,12 +122,12 @@ def main():
         for j in shifts:
             ref_imgs.append(imread(imgs[i + j]).astype(np.float32))
 
+        h, w, _ = img0.shape
 
         if (not args.no_resize) and (h != args.img_height or w != args.img_width):
             img0 = imresize(img0, (args.img_height, args.img_width)).astype(np.float32)
             ref_imgs=[imresize(im, (args.img_height, args.img_width)).astype(np.float32) for im in ref_imgs]
 
-        h, w, _ = img0.shape
 
         with torch.no_grad():
 

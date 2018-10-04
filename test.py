@@ -2,7 +2,10 @@ import numpy as np
 from scipy.misc import imread, imsave, imresize
 import matplotlib.pyplot as plt
 
-img = imread('indoor_flying1_cnt_0000000368.jpg').astype(np.float32)
+
+import cv2
+image = imread('frame_0000000284.jpg')
+
 
 
 import glob
