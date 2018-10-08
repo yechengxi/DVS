@@ -135,7 +135,7 @@ def main():
     #normalize = custom_transforms.Normalize(mean=[0.5, 0.5, 0.5],std=[.5,.5,.5])
     #normalize = custom_transforms.Normalize(mean=[0.5, 0.5],std=[.5,.5])
 
-    train_transform = custom_transforms.Compose([#custom_transforms.CropBottom(),
+    train_transform = custom_transforms.Compose([
         custom_transforms.RandomHorizontalFlip(),
         custom_transforms.RandomScaleCrop(),
         custom_transforms.ArrayToTensor(),
@@ -148,8 +148,8 @@ def main():
                                                 ])
 
     print("=> fetching scenes in '{}'".format(args.data))
-    train_set = StackedSequenceFolder(
-    #train_set = SequenceFolder(
+    #train_set = StackedSequenceFolder(
+    train_set = CloudSequenceFolder(
         args.data,
         transform=train_transform,
         seed=args.seed,
@@ -159,8 +159,8 @@ def main():
     )
 
     # if no Groundtruth is avalaible, Validation set is the same type as training set to measure photometric loss from warping
-    val_set = StackedSequenceFolder(
-    #val_set = SequenceFolder(
+    #val_set = StackedSequenceFolder(
+    val_set = CloudSequenceFolder(
         args.data,
         transform=valid_transform,
         seed=args.seed,
@@ -537,8 +537,8 @@ def train(args, train_loader, disp_net, pose_exp_net, optimizer, epoch_size,  tr
                         residual_flow = flow_to_image((rigid_flows[k][j][0]-ego_flows[k][j][0]).data.cpu().numpy())
                         train_writer.add_image('residual flow {} {}'.format(k, j), residual_flow / 255, n_iter)
 
-                    ref_warped = ref_warped[0]
-                    if ref_warped.shape[1]==3:
+                    if ref_warped.shape[1] == 3:
+                        ref_warped = ref_warped[0]
                         train_writer.add_image('train Warped Outputs {} {}'.format(k,j), tensor2array(ref_warped.data.cpu(),colormap='bone',max_value=1), n_iter)
                         train_writer.add_image('train Diff Outputs {} {}'.format(k,j), tensor2array(0.5*(tgt_img_scaled[0] - ref_warped).abs().data.cpu(),colormap='bone',max_value=1.), n_iter)
 
