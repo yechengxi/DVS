@@ -482,7 +482,8 @@ class CloudSequenceFolder(data.Dataset):
             for i in range(self.sequence_length):
                 tmp=cloud[idx[i*T]:idx[(i+1)*T]]
 
-                #cmb=dvs_img(tmp, (200,346))
+                cmb=dvs_img(tmp, (200,346))
+                """
                 cmb = libdvs.dvs_img(tmp)
                 cmb[np.isnan(cmb)]=0.
                 cmb=np.clip(cmb,-1.,255.)
@@ -490,7 +491,7 @@ class CloudSequenceFolder(data.Dataset):
                 cmb[:, :, 0] *= global_scale_pp
                 cmb[:, :, 1] *= 255.0 / slice_width
                 cmb[:, :, 2] *= global_scale_pn
-
+                """
 
                 ref_imgs.append(cmb)
             tgt_img=ref_imgs.pop(int((self.sequence_length-1)/2))
