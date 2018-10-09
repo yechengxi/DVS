@@ -116,6 +116,62 @@ class simple_photometric_reconstruction_loss(nn.Module):
 
 
 
+
+
+class sharpness_loss(nn.Module):
+    def __init__(self):
+        super(sharpness_loss, self).__init__()
+
+    def forward(self, tgt_img, ref_imgs, intrinsics, intrinsics_inv, depth, explainability_mask, pose, padding_mode='border'):
+        def one_scale(depth,explainability_mask,pose):
+
+            sharpness_loss = 0
+            b, _, h, w = depth.size()
+            downscale = tgt_img.size(2)/h
+            ego_flows_scaled=[]
+            tgt_img_scaled = nn.functional.adaptive_avg_pool2d(tgt_img, (h, w))
+            ref_imgs_scaled = [nn.functional.adaptive_avg_pool2d(ref_img, (h, w)) for ref_img in ref_imgs]
+            intrinsics_scaled = torch.cat((intrinsics[:, 0:2]/downscale, intrinsics[:, 2:]), dim=1)
+            intrinsics_scaled_inv = torch.cat((intrinsics_inv[:, :, 0:2]*downscale, intrinsics_inv[:, :, 2:]), dim=2)
+
+            for i, ref_img in enumerate(ref_imgs_scaled):
+                if pose.size(1) == len(ref_imgs):
+                    current_pose = pose[:, i]
+                elif pose.size(1)==len(ref_imgs)*6:
+                    current_pose=pose[:,i*6:(i+1)*6]
+
+                ref_img_warped,_,ego_flow = simple_inverse_warp(ref_img, depth[:,0], current_pose, intrinsics_scaled, intrinsics_scaled_inv, padding_mode)
+                out_of_bound = 1 - (ref_img_warped == 0).type_as(ref_img_warped)
+                #print(ego_flow.min(),ego_flow.mean(),ego_flow.max())
+
+                scaling=ref_img.view(b,3,-1).sum(-1)/(1e-2+ref_img_warped.view(b,3,-1).sum(-1))
+                print(scaling.view(1,-1))
+                tgt_img_scaled =tgt_img_scaled+ ref_img_warped*scaling.view(b,3,1,1)# * out_of_bound
+                ego_flows_scaled.append(ego_flow)
+
+            sharpness_loss += torch.pow(tgt_img_scaled[:,0].abs()+tgt_img_scaled[:,2].abs()+1e-4, 0.5).view(b, -1).mean(1)
+
+            return sharpness_loss,ego_flows_scaled
+
+        if type(explainability_mask) not in [tuple, list]:
+            explainability_mask = [explainability_mask]
+        if type(depth) not in [list, tuple]:
+            depth = [depth]
+        if type(pose) in [tuple, list]:
+            assert len(pose)==len(depth)
+        else:
+            pose=[pose for i in range(len(depth))]
+        loss = 0
+        ego_flows=[]
+        #depth=depth[:1];explainability_mask=explainability_mask[:1];pose=pose[:1]
+        for d, mask, p in zip(depth, explainability_mask,pose):
+            current_loss,ego_flows_scaled= one_scale(d, mask,p)
+            loss=loss+current_loss
+            ego_flows.append(ego_flows_scaled)
+        return loss,ego_flows
+
+
+
 class two_stage_photometric_reconstruction_loss(nn.Module):
     def __init__(self):
         super(two_stage_photometric_reconstruction_loss, self).__init__()

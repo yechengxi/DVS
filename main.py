@@ -20,7 +20,7 @@ from utils import *
 
 from inverse_warp import inverse_warp,simple_inverse_warp
 
-from loss_functions import photometric_reconstruction_loss,simple_photometric_reconstruction_loss,two_stage_photometric_reconstruction_loss, explainability_loss, smooth_loss,non_local_smooth_loss, compute_errors,pose_smooth_loss,ssim,msssim
+from loss_functions import sharpness_loss,simple_photometric_reconstruction_loss,two_stage_photometric_reconstruction_loss, explainability_loss, smooth_loss,non_local_smooth_loss, compute_errors,pose_smooth_loss,ssim,msssim
 from logger import AverageMeter
 from itertools import chain
 from tensorboardX import SummaryWriter
@@ -86,7 +86,7 @@ parser.add_argument('--log-output', action='store_true', help='will log dispnet 
 
 parser.add_argument('-f', '--training-output-freq', type=int, help='frequence for outputting dispnet outputs and warped imgs at training for all scales if 0 will not output',
                     metavar='N', default=0)
-parser.add_argument('--simple', action='store_true',help='use simple warping')
+parser.add_argument('--sharp', action='store_true',help='use sharpness loss')
 
 #optimizer
 parser.add_argument('--optimizer', default='Adam', help='optimizer(SGD|Adam)')
@@ -227,8 +227,8 @@ def main():
     disp_net = torch.nn.DataParallel(disp_net)
     pose_exp_net = torch.nn.DataParallel(pose_exp_net)
 
-    args.photometric_reconstruction_loss=photometric_reconstruction_loss().cuda()
-    args.photometric_reconstruction_loss=torch.nn.DataParallel(args.photometric_reconstruction_loss)
+    args.sharpness_loss=sharpness_loss().cuda()
+    args.sharpness_loss=torch.nn.DataParallel(args.sharpness_loss)
 
     args.simple_photometric_reconstruction_loss = simple_photometric_reconstruction_loss().cuda()
     args.simple_photometric_reconstruction_loss = torch.nn.DataParallel(args.simple_photometric_reconstruction_loss)
@@ -342,7 +342,12 @@ def train(args, train_loader, disp_net, pose_exp_net, optimizer, epoch_size,  tr
     start_time = time.time()
     end = time.time()
 
-    for i, (tgt_img, ref_imgs, intrinsics, intrinsics_inv) in enumerate(train_loader):
+    for i, data in enumerate(train_loader):
+        if len(data)==4:
+            tgt_img, ref_imgs, intrinsics, intrinsics_inv=data
+        else:
+            tgt_img, ref_imgs, intrinsics, intrinsics_inv,slices=data
+
         # measure data loading time
         data_time.update(time.time() - end)
         tgt_img_var = tgt_img.cuda()
@@ -372,23 +377,17 @@ def train(args, train_loader, disp_net, pose_exp_net, optimizer, epoch_size,  tr
             depth=depth_s
             disparities=disparities_s
 
-        if not args.simple:
-            loss_1,ego_flows = args.photometric_reconstruction_loss(tgt_img_var, ref_imgs_var,
+        if args.sharp:
+            loss_1,ego_flows = args.sharpness_loss(tgt_img_var, ref_imgs_var,
                                                      intrinsics_var, intrinsics_inv_var,
                                                      depth, explainability_mask, pose,
-                                                     args.rotation_mode, args.padding_mode)
+                                                     'border')
         else:
-            if w4>0:
-                loss_1,ego_flows,rigid_flows=args.two_stage_photometric_reconstruction_loss(tgt_img_var, ref_imgs_var,
-                                                                     intrinsics_var, intrinsics_inv_var,
-                                                                     depth, explainability_mask,explainability_mask2,
-                                                                     pose, pixel_pose,
-                                                                     args.ssim_weight, args.padding_mode)
-            else:
-                loss_1,ego_flows = args.simple_photometric_reconstruction_loss(tgt_img_var, ref_imgs_var,
-                                                                     intrinsics_var, intrinsics_inv_var,
-                                                                     depth, explainability_mask, pose,
-                                                                     args.ssim_weight, args.padding_mode)
+
+            loss_1,ego_flows = args.simple_photometric_reconstruction_loss(tgt_img_var, ref_imgs_var,
+                                                                 intrinsics_var, intrinsics_inv_var,
+                                                                 depth, explainability_mask, pose,
+                                                                 args.ssim_weight, args.padding_mode)
 
         loss_1=loss_1.mean()
 
@@ -464,10 +463,8 @@ def train(args, train_loader, disp_net, pose_exp_net, optimizer, epoch_size,  tr
             #print('p',pixel_pose[0].view(pose.shape[0],12,-1).abs().mean(0).mean(1).view(2,6).mean(0).data.cpu().numpy())
 
             if tgt_img.shape[1]==3:
+                tgt_img[0]
                 train_writer.add_image('train Input', tensor2array(tgt_img[0],max_value=1,colormap='bone'), n_iter)
-            else:
-                train_writer.add_image('train Input', tensor2array(tgt_img[0,0], max_value=.1, colormap='bone'), n_iter)
-
 
             for k,scaled_depth in enumerate(depth):
                 train_writer.add_image('train Dispnet Output Normalized {}'.format(k),tensor2array(disparities[k].data[0].cpu(), max_value=None, colormap='bone'),n_iter)
@@ -481,7 +478,7 @@ def train(args, train_loader, disp_net, pose_exp_net, optimizer, epoch_size,  tr
                 intrinsics_scaled_inv = torch.cat((intrinsics_inv_var[:, :, 0:2]*downscale, intrinsics_inv_var[:, :, 2:]), dim=2)
 
                 # log warped images along with explainability mask
-
+                stacked_im=tgt_img_scaled[0]
                 for j,ref in enumerate(ref_imgs_scaled):
                     if explainability_mask[k] is not None:
                         train_writer.add_image('train Exp mask Outputs {} {}'.format(k, j),
@@ -492,40 +489,33 @@ def train(args, train_loader, disp_net, pose_exp_net, optimizer, epoch_size,  tr
                                                tensor2array(explainability_mask2[k][0, j].data.cpu(), max_value=1,
                                                             colormap='bone'), n_iter)
 
-                    if not args.simple:
+                    if w4 > 0:
+                        pixel_pose_tmp=pixel_pose[k]
+                        p = pixel_pose_tmp.shape[1]
+                        pixel_pose_tmp=pixel_pose_tmp-pose.view(b,p,1,1)
+                        pixel_pose_im = pixel_pose_tmp[0, p // 2:p // 2 + 3].permute(1, 2, 0).data.cpu()
+                        pixel_pose_im = (pixel_pose_im - pixel_pose_im.min()) / (
+                                pixel_pose_im.max() - pixel_pose_im.min() + 1e-9)
+                        pixel_pose_im2 = pixel_pose_tmp[0, p // 2 + 3:p // 2 + 6].permute(1, 2, 0).data.cpu()
+                        pixel_pose_im2 = (pixel_pose_im2 - pixel_pose_im2.min()) / (
+                                pixel_pose_im2.max() - pixel_pose_im2.min() + 1e-9)
+                        pixel_pose_im3 = pixel_pose_tmp[0, p // 2 + 2].data.cpu()
+                        pixel_pose_im3 = (pixel_pose_im3 - pixel_pose_im3.min()) / (
+                                pixel_pose_im3.max() - pixel_pose_im3.min() + 1e-9)
+                        pixel_pose_im3 = pixel_pose_im3.unsqueeze(2).expand_as(pixel_pose_im)
+                        train_writer.add_image('residual pixel pose1 {} {}'.format(k, 1), pixel_pose_im.numpy(), n_iter)
+                        train_writer.add_image('residual pixel pose2 {} {}'.format(k, 1), pixel_pose_im2.numpy(), n_iter)
+                        train_writer.add_image('v_z {} {}'.format(k, 1), pixel_pose_im3.numpy(), n_iter)
 
-                        ref_warped = inverse_warp(ref, scaled_depth[:,0], pose[:,j],
-                                                  intrinsics_scaled, intrinsics_scaled_inv,
-                                                  rotation_mode=args.rotation_mode,
-                                                  padding_mode=args.padding_mode)[0]
+                        current_pose = pixel_pose_tmp[:1, j * 6:(j + 1) * 6]
                     else:
-                        if w4 > 0:
-                            pixel_pose_tmp=pixel_pose[k]
-                            p = pixel_pose_tmp.shape[1]
-                            pixel_pose_tmp=pixel_pose_tmp-pose.view(b,p,1,1)
-                            pixel_pose_im = pixel_pose_tmp[0, p // 2:p // 2 + 3].permute(1, 2, 0).data.cpu()
-                            pixel_pose_im = (pixel_pose_im - pixel_pose_im.min()) / (
-                                    pixel_pose_im.max() - pixel_pose_im.min() + 1e-9)
-                            pixel_pose_im2 = pixel_pose_tmp[0, p // 2 + 3:p // 2 + 6].permute(1, 2, 0).data.cpu()
-                            pixel_pose_im2 = (pixel_pose_im2 - pixel_pose_im2.min()) / (
-                                    pixel_pose_im2.max() - pixel_pose_im2.min() + 1e-9)
-                            pixel_pose_im3 = pixel_pose_tmp[0, p // 2 + 2].data.cpu()
-                            pixel_pose_im3 = (pixel_pose_im3 - pixel_pose_im3.min()) / (
-                                    pixel_pose_im3.max() - pixel_pose_im3.min() + 1e-9)
-                            pixel_pose_im3 = pixel_pose_im3.unsqueeze(2).expand_as(pixel_pose_im)
-                            train_writer.add_image('residual pixel pose1 {} {}'.format(k, 1), pixel_pose_im.numpy(), n_iter)
-                            train_writer.add_image('residual pixel pose2 {} {}'.format(k, 1), pixel_pose_im2.numpy(), n_iter)
-                            train_writer.add_image('v_z {} {}'.format(k, 1), pixel_pose_im3.numpy(), n_iter)
-
-                            current_pose = pixel_pose_tmp[:1, j * 6:(j + 1) * 6]
-                        else:
-                            current_pose = pose[:1, j]
+                        current_pose = pose[:1, j]
 
 
-                        ref_warped, _, flow = simple_inverse_warp(ref, scaled_depth[:, 0], current_pose,
-                                                                  intrinsics_scaled, intrinsics_scaled_inv,
-                                                                  padding_mode=args.padding_mode)
-                        flow = flow[0]
+                    ref_warped, _, flow = simple_inverse_warp(ref, scaled_depth[:, 0], current_pose,
+                                                              intrinsics_scaled, intrinsics_scaled_inv,
+                                                              padding_mode=args.padding_mode)
+                    flow = flow[0]
 
                     if ego_flows is not None:
                         ego_flow = flow_to_image(ego_flows[k][j][0].data.cpu().numpy())
@@ -539,8 +529,11 @@ def train(args, train_loader, disp_net, pose_exp_net, optimizer, epoch_size,  tr
 
                     if ref_warped.shape[1] == 3:
                         ref_warped = ref_warped[0]
+                        stacked_im=stacked_im+ref_warped
                         train_writer.add_image('train Warped Outputs {} {}'.format(k,j), tensor2array(ref_warped.data.cpu(),colormap='bone',max_value=1), n_iter)
                         train_writer.add_image('train Diff Outputs {} {}'.format(k,j), tensor2array((tgt_img_scaled[0] - ref_warped).abs().data.cpu(),colormap='bone',max_value=1.), n_iter)
+                stacked_im[1]=0
+                train_writer.add_image('train stacked Outputs {}'.format(k), tensor2array(stacked_im.abs().data.cpu(),colormap='bone',max_value=None), n_iter)
 
 
 
@@ -587,7 +580,12 @@ def validate_without_gt(args, val_loader, disp_net, pose_exp_net, epoch, output_
     start_time = time.time()
 
     end = time.time()
-    for i, (tgt_img, ref_imgs, intrinsics, intrinsics_inv) in enumerate(val_loader):
+    for i, data in enumerate(val_loader):
+
+        if len(data) == 4:
+            tgt_img, ref_imgs, intrinsics, intrinsics_inv = data
+        else:
+            tgt_img, ref_imgs, intrinsics, intrinsics_inv, slices = data
 
         with torch.no_grad():
 
@@ -613,12 +611,12 @@ def validate_without_gt(args, val_loader, disp_net, pose_exp_net, epoch, output_
                 disp=disp_s
                 depth=depth_s
 
-            if not args.simple:
+            if args.sharp:
 
-                loss_1,ego_flows = args.photometric_reconstruction_loss(tgt_img_var, ref_imgs_var,
+                loss_1,ego_flows = args.sharpness_loss(tgt_img_var, ref_imgs_var,
                                                          intrinsics_var, intrinsics_inv_var,
                                                          depth, explainability_mask, pose,
-                                                         args.rotation_mode, args.padding_mode)
+                                                        args.padding_mode)
             else:
                 loss_1,ego_flows = args.simple_photometric_reconstruction_loss(tgt_img_var, ref_imgs_var,
                                                          intrinsics_var, intrinsics_inv_var,
@@ -658,23 +656,16 @@ def validate_without_gt(args, val_loader, disp_net, pose_exp_net, epoch, output_
                         output_writers[index].add_image('val Exp mask Outputs {}'.format( j),
                                                tensor2array(explainability_mask[0, j].data.cpu(), max_value=1,
                                                             colormap='bone'), n_iter)
-                    if not args.simple:
+                    current_pose = pose[:1, j]
 
-                        ref_warped = inverse_warp(ref[:1], depth[:1,0], pose[:1,j],
-                                                  intrinsics_var[:1], intrinsics_inv_var[:1],
-                                                  rotation_mode=args.rotation_mode,
-                                                  padding_mode=args.padding_mode)[0]
-                    else:
-                        current_pose = pose[:1, j]
-
-                        ref_warped, _, flow = simple_inverse_warp(ref, depth[:, 0], current_pose,
-                                                                  intrinsics_var, intrinsics_inv_var,
-                                                                  padding_mode=args.padding_mode)
-                        flow = flow[0]
-                        ref_warped = ref_warped[0]
-                        if ref_warped.shape[1]==3:
-                            output_writers[index].add_image('val Warped Outputs {}'.format(j), tensor2array(ref_warped.data.cpu(),colormap='bone',max_value=1), n_iter)
-                            output_writers[index].add_image('val Diff Outputs {}'.format(j), tensor2array((tgt_img_var[0] - ref_warped).abs().data.cpu(),colormap='bone',max_value=1), n_iter)
+                    ref_warped, _, flow = simple_inverse_warp(ref, depth[:, 0], current_pose,
+                                                              intrinsics_var, intrinsics_inv_var,
+                                                              padding_mode=args.padding_mode)
+                    flow = flow[0]
+                    ref_warped = ref_warped[0]
+                    if ref_warped.shape[1]==3:
+                        output_writers[index].add_image('val Warped Outputs {}'.format(j), tensor2array(ref_warped.data.cpu(),colormap='bone',max_value=1), n_iter)
+                        output_writers[index].add_image('val Diff Outputs {}'.format(j), tensor2array((tgt_img_var[0] - ref_warped).abs().data.cpu(),colormap='bone',max_value=1), n_iter)
 
 
             if log_outputs and i < len(val_loader)-1:

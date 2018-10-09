@@ -83,8 +83,8 @@ class RandomScaleCrop(object):
         for im in images:
             chs=[]
             for c in range(im.shape[2]):
-                #chs.append(imresize(im[:,:,c], (scaled_h, scaled_w)))
-                chs.append(zoom(im[:, :, c], (y_scaling, x_scaling)))
+                chs.append(imresize(im[:,:,c], (scaled_h, scaled_w)))
+                #chs.append(zoom(im[:, :, c], (y_scaling, x_scaling)))
             scaled_images.append(np.stack(chs,axis=2))
 
         #scaled_images = [imresize(im, (scaled_h, scaled_w)) for c  for im in images]

@@ -472,42 +472,58 @@ class CloudSequenceFolder(data.Dataset):
 
     def __getitem__(self, index):
         sample = self.samples[index]
-        if not self.LoadToRam:
-            sl_npz = np.load(sample['tgt'])
-            cloud = sl_npz['events']
-            fcloud = cloud.astype(np.float32)  # Important!
+        sl_npz = np.load(sample['tgt'])
+        cloud = sl_npz['events']
+        fcloud = cloud.astype(np.float32)  # Important!
 
-            idx = sl_npz['index']
-            n_slice=len(idx)
-            T=int(n_slice/self.sequence_length)
-            ref_imgs=[]
-            for i in range(self.sequence_length):
-                tmp=fcloud[idx[i*T]:idx[(i+1)*T]]
+        idx = sl_npz['index']
+        n_slice=len(idx)+1
+        idx=[0]+list(idx)+[len(fcloud)]
 
-                #cmb=dvs_img(tmp, (200,346))
-                cmb = np.zeros((200, 346, 3), dtype=np.float32)
-                libdvs.dvs_img(tmp, cmb)
+        T=int(n_slice/self.sequence_length)
+        ref_imgs=[]
+        for i in range(self.sequence_length):
+            tmp=fcloud[idx[i*T]:idx[(i+1)*T]]
 
-                cmb[np.isnan(cmb)]=0.
-                cmb=np.clip(cmb,0.,255.)
-                cmb[:, :, 0] *= global_scale_pp
-                cmb[:, :, 1] *= 255.0 / slice_width
-                cmb[:, :, 2] *= global_scale_pn
+            #cmb=dvs_img(tmp, (200,346))
+            cmb = np.zeros((200, 346, 3), dtype=np.float32)
+            libdvs.dvs_img(tmp, cmb)
 
-                ref_imgs.append(cmb)
-            tgt_img=ref_imgs.pop(int((self.sequence_length-1)/2))
+            cmb[np.isnan(cmb)]=0.
+            cmb=np.clip(cmb,0.,255.)
+            cmb[:, :, 0] *= global_scale_pp
+            cmb[:, :, 1] *= 255.0 / slice_width
+            cmb[:, :, 2] *= global_scale_pn
 
-        else:
-            tgt_img = sample['tgt']
+            ref_imgs.append(cmb)
+        tgt_img=ref_imgs.pop(int((self.sequence_length-1)/2))
+
+        # store slices
+        slices=[]
+        """
+        for i in range(n_slice):
+            tmp = fcloud[idx[i]:idx[i + 1]]
+            cmb = np.zeros((200, 346, 3), dtype=np.float32)
+            libdvs.dvs_img(tmp, cmb)
+
+            cmb[np.isnan(cmb)] = 0.
+            cmb = np.clip(cmb, 0., 255.)
+            cmb[:, :, 0] *= global_scale_pp
+            cmb[:, :, 1] *= 255.0 / slice_width
+            cmb[:, :, 2] *= global_scale_pn
+            slices.append(cmb)
+        """
 
         if self.transform is not None:
-            imgs, intrinsics = self.transform([tgt_img] + ref_imgs, np.copy(sample['intrinsics']))
+            imgs, intrinsics = self.transform([tgt_img] + ref_imgs+slices, np.copy(sample['intrinsics']))
             tgt_img = imgs[0]
-            ref_imgs = imgs[1:]
+            ref_imgs = imgs[1:self.sequence_length]
+            slices=imgs[self.sequence_length:]
+
         else:
             intrinsics = np.copy(sample['intrinsics'])
         if self.train or (not self.gt):
-            return tgt_img, ref_imgs, intrinsics, np.linalg.inv(intrinsics)
+            return tgt_img, ref_imgs, intrinsics, np.linalg.inv(intrinsics),slices
         else:
             depth = np.load(sample['depth']).astype(np.float32)
             return tgt_img, ref_imgs, intrinsics, np.linalg.inv(intrinsics), depth
