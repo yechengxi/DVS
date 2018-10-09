@@ -427,7 +427,7 @@ class CloudSequenceFolder(data.Dataset):
             self.scenes = [scene for scene in self.scenes if 'train' in scene]
         else:
             self.train = False
-            self.scenes = [scene for scene in self.scenes if 'eval' in scene]
+            self.scenes = [scene for scene in self.scenes if 'train' in scene]
         self.transform = transform
         self.crawl_folders(sequence_length)
 
@@ -475,23 +475,24 @@ class CloudSequenceFolder(data.Dataset):
         if not self.LoadToRam:
             sl_npz = np.load(sample['tgt'])
             cloud = sl_npz['events']
+            fcloud = cloud.astype(np.float32)  # Important!
+
             idx = sl_npz['index']
             n_slice=len(idx)
             T=int(n_slice/self.sequence_length)
             ref_imgs=[]
             for i in range(self.sequence_length):
-                tmp=cloud[idx[i*T]:idx[(i+1)*T]]
+                tmp=fcloud[idx[i*T]:idx[(i+1)*T]]
 
-                cmb=dvs_img(tmp, (200,346))
-                """
-                cmb = libdvs.dvs_img(tmp)
+                #cmb=dvs_img(tmp, (200,346))
+                cmb = np.zeros((200, 346, 3), dtype=np.float32)
+                libdvs.dvs_img(tmp, cmb)
+
                 cmb[np.isnan(cmb)]=0.
-                cmb=np.clip(cmb,-1.,255.)
-                #print(cmb.min(),cmb.max())
+                cmb=np.clip(cmb,0.,255.)
                 cmb[:, :, 0] *= global_scale_pp
                 cmb[:, :, 1] *= 255.0 / slice_width
                 cmb[:, :, 2] *= global_scale_pn
-                """
 
                 ref_imgs.append(cmb)
             tgt_img=ref_imgs.pop(int((self.sequence_length-1)/2))
