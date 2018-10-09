@@ -540,7 +540,7 @@ def train(args, train_loader, disp_net, pose_exp_net, optimizer, epoch_size,  tr
                     if ref_warped.shape[1] == 3:
                         ref_warped = ref_warped[0]
                         train_writer.add_image('train Warped Outputs {} {}'.format(k,j), tensor2array(ref_warped.data.cpu(),colormap='bone',max_value=1), n_iter)
-                        train_writer.add_image('train Diff Outputs {} {}'.format(k,j), tensor2array(0.5*(tgt_img_scaled[0] - ref_warped).abs().data.cpu(),colormap='bone',max_value=1.), n_iter)
+                        train_writer.add_image('train Diff Outputs {} {}'.format(k,j), tensor2array((tgt_img_scaled[0] - ref_warped).abs().data.cpu(),colormap='bone',max_value=1.), n_iter)
 
 
 
@@ -674,7 +674,7 @@ def validate_without_gt(args, val_loader, disp_net, pose_exp_net, epoch, output_
                         ref_warped = ref_warped[0]
                         if ref_warped.shape[1]==3:
                             output_writers[index].add_image('val Warped Outputs {}'.format(j), tensor2array(ref_warped.data.cpu(),colormap='bone',max_value=1), n_iter)
-                            output_writers[index].add_image('val Diff Outputs {}'.format(j), tensor2array(0.5*(tgt_img_var[0] - ref_warped).abs().data.cpu(),colormap='bone',max_value=1), n_iter)
+                            output_writers[index].add_image('val Diff Outputs {}'.format(j), tensor2array((tgt_img_var[0] - ref_warped).abs().data.cpu(),colormap='bone',max_value=1), n_iter)
 
 
             if log_outputs and i < len(val_loader)-1:
