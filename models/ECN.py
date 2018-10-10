@@ -464,3 +464,133 @@ class ECN_Pose(nn.Module):
         else:
             return exps[0],exps2[0], pixel_poses[0], disps[0], pose
 
+
+
+
+class ECN_DispPose(nn.Module):
+    def __init__(self, input_size, nb_ref_imgs=4, init_planes=32, scale_factor=0.5, growth_rate=32,
+                 final_map_size=1, output_exp=False, output_disp=True, alpha=10, beta=0.01,
+                 norm_type='gn'):
+        super(ECN_DispPose, self).__init__()
+        self.scale_factor = scale_factor
+        self.final_map_size = final_map_size
+        self.encoding_layers = nn.ModuleList()
+        self.decoding_layers = nn.ModuleList()
+
+        self.nb_ref_imgs = nb_ref_imgs
+        self.output_exp = output_exp
+        self.output_disp = output_disp
+        self.alpha = alpha
+        self.beta = beta
+        self.pred_planes = nb_ref_imgs + 1
+
+        in_planes = 3
+
+        out_planes = init_planes
+        output_size = input_size
+        self.conv1 = nn.Conv2d(in_planes, init_planes, kernel_size=3, padding=1, stride=2, bias=False)
+        output_size = math.floor(output_size / 2)
+        while math.floor(output_size * scale_factor) >= final_map_size:
+            new_out_planes = out_planes + growth_rate
+            if len(self.encoding_layers) == 0:
+                kernel_size = 3
+            else:
+                kernel_size = 3
+            self.encoding_layers.append(
+                CascadeLayer(in_planes=out_planes, out_planes=new_out_planes, kernel_size=kernel_size,
+                             scale_factor=scale_factor,norm_type=norm_type))
+            output_size = math.floor(output_size * scale_factor)
+            out_planes = out_planes + growth_rate
+
+        print(len(self.encoding_layers), ' encoding layers.')
+        print(out_planes, ' encoded feature maps.')
+
+        self.pose_pred = SingleConvBlock(out_planes, 6, kernel_size=1, padding=0,
+                                         norm_type=norm_type)
+
+        in_planes2 = out_planes  # encoder planes
+        self.predicts = 4
+        planes = []
+        for i in range(len(self.encoding_layers) + 1):
+            if i == len(self.encoding_layers):
+                in_planes2 = in_planes  # encoder planes
+                new_out_planes = max(in_planes, self.pred_planes)
+            else:
+                in_planes2 = in_planes2 - growth_rate  # encoder planes
+                new_out_planes = max(out_planes - growth_rate, self.pred_planes)
+            self.decoding_layers.append(
+                InvertedCascadeLayer(in_planes=out_planes, in_planes2=in_planes2, out_planes=new_out_planes,norm_type=norm_type))
+            out_planes = new_out_planes
+            planes.append(out_planes)
+
+        planes.reverse()
+
+        self.predict_maps = nn.ModuleList()
+        for i in range(self.predicts):
+            self.predict_maps.append(
+                SingleConvBlock(planes[i], self.pred_planes, kernel_size=3, padding=1, norm_type=norm_type))
+
+    def init_weights(self):
+
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                nn.init.xavier_uniform_(m.weight)
+                # nn.init.kaiming_normal_(m.weight)
+                if m.bias is not None:
+                    m.bias.data.zero_()
+            elif isinstance(m, nn.Linear):
+                nn.init.xavier_uniform_(m.weight)
+                if m.bias is not None:
+                    nn.init.constant_(m.bias, 0)
+
+    def forward(self, input):
+
+        b, _, h, w = input.shape
+        encode = [input]
+        encode.append(self.conv1(encode[-1]))
+
+        for i, layer in enumerate(self.encoding_layers):
+            encode.append(layer(encode[-1]))
+
+        out = encode[-1]
+
+        pose = self.pose_pred(out)
+        pose = pose.mean(3).mean(2)
+        pose = 0.001 * pose.view(pose.size(0), 1, 6)
+
+        decode = [out]
+        predicts = []
+
+        for i, layer in enumerate(self.decoding_layers):
+            out = layer(decode[-1], encode[-2 - i])
+            decode.append(out)
+
+            j = len(self.decoding_layers) - i
+            if j <= self.predicts:
+                pred = self.predict_maps[j - 1](decode[-1])
+                predicts.append(pred)
+                if len(predicts) > 1:
+                    predicts[-1] = predicts[-1] + scaling(predicts[-2],output_size=predicts[-1].shape)  # residual learning
+                decode[-1] = torch.cat([decode[-1][:, :self.pred_planes] + predicts[-1], decode[-1][:, self.pred_planes:]],dim=1)  # residual learning
+        predicts.reverse()
+
+        #for i in range(self.predicts):
+        #    print(i,predicts[i].min().item(),predicts[i].mean().item(),predicts[i].max().item())
+
+        if self.output_exp:
+            exps = [torch.sigmoid(predicts[i][:, :self.nb_ref_imgs]) for i in range(self.predicts)]
+        else:
+            exps = [None for i in range(self.predicts)]
+
+        if self.output_disp:
+            disps = [self.alpha * torch.sigmoid(predicts[i][:, -1:]) + self.beta for i in range(self.predicts)]
+        else:
+            disps = [None for i in range(self.predicts)]
+
+        if self.training:
+            return disps, exps, pose
+        else:
+            return disps[0], exps[0], pose
+
+
+
