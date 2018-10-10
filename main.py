@@ -324,7 +324,7 @@ def train(args, train_loader, net, optimizer, epoch_size,  train_writer):
 
         # compute output
         disparities, explainability_mask, pose = net(tgt_img_var)
-        depth = [1 / disp for disp in disparities]
+        #depth = [1 / disp for disp in disparities]
         ego_flows=None
         rigid_flows=None
 

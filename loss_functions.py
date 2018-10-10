@@ -141,8 +141,10 @@ class sharpness_loss(nn.Module):
                 ref_img_warped=ref_imgs_warped[i]
                 new_grid=grids[i]
                 in_bound = (new_grid[:,:,:,0]!=2).type_as(ref_img_warped).unsqueeze(1)
-                scaling = ref_img.view(b, 3, -1).sum(-1) / (1e-2 + ref_img_warped.view(b, 3, -1).sum(-1))
-                stacked_im = stacked_im + ref_img_warped  * scaling.view(b, 3, 1, 1)#* in_bound
+                #print(ref_img.min(),ref_img.mean(),ref_img.max(),ref_img_warped.min(),ref_img_warped.mean(),ref_img_warped.max())
+                scaling = ref_img.view(b, 3, -1).mean(-1) / (1e-5 + ref_img_warped.view(b, 3, -1).mean(-1))
+                #print(scaling.view(1,-1))
+                stacked_im = stacked_im + ref_img_warped * in_bound* scaling.view(b, 3, 1, 1)
 
             #sharpness_loss += torch.pow(stacked_im[:,0].abs()+stacked_im[:,2].abs()+1e-4, .5).view(b, -1).mean(1)
             sharpness_loss += torch.pow(stacked_im.abs()+1e-4, .5).view(b, -1).mean(1)
