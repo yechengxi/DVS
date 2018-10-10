@@ -2,7 +2,7 @@ from __future__ import division
 import torch
 from torch import nn
 from torch.autograd import Variable
-from inverse_warp import inverse_warp
+from inverse_warp import *
 
 import torch.nn.functional as F
 
@@ -55,7 +55,6 @@ class photometric_reconstruction_loss(nn.Module):
 
 
 import numpy as np
-from inverse_warp import get_new_grid, simple_inverse_warp
 
 
 class simple_photometric_reconstruction_loss(nn.Module):
@@ -134,19 +133,19 @@ class sharpness_loss(nn.Module):
             intrinsics_scaled_inv = torch.cat((intrinsics_inv[:, :, 0:2]*downscale, intrinsics_inv[:, :, 2:]), dim=2)
 
             stacked_im=0.
-            for i, ref_img in enumerate(ref_imgs_scaled):
-                current_pose = pose[:, i]
 
+            ref_imgs_warped, grids, ego_flows_scaled = multi_inverse_warp(ref_imgs_scaled, depth[:, 0], pose, intrinsics_scaled,
+                                                              intrinsics_scaled_inv, padding_mode)
+            for i in range(len(ref_imgs)):
+                ref_img=ref_imgs[i]
+                ref_img_warped=ref_imgs_warped[i]
+                new_grid=grids[i]
+                in_bound = (new_grid[:,:,:,0]!=2).type_as(ref_img_warped).unsqueeze(1)
+                scaling = ref_img.view(b, 3, -1).sum(-1) / (1e-2 + ref_img_warped.view(b, 3, -1).sum(-1))
+                stacked_im = stacked_im + ref_img_warped  * scaling.view(b, 3, 1, 1)#* in_bound
 
-                ref_img_warped,_,ego_flow = simple_inverse_warp(ref_img, depth[:,0], current_pose, intrinsics_scaled, intrinsics_scaled_inv, padding_mode)
-                out_of_bound = 1 - (ref_img_warped == 0).type_as(ref_img_warped)
-                #print(ego_flow.min(),ego_flow.mean(),ego_flow.max())
-
-                scaling=ref_img.view(b,3,-1).sum(-1)/(1e-2+ref_img_warped.view(b,3,-1).sum(-1))
-                stacked_im =stacked_im+ ref_img_warped*scaling.view(b,3,1,1)# * out_of_bound
-                ego_flows_scaled.append(ego_flow)
-
-            sharpness_loss += torch.pow(stacked_im[:,0].abs()+stacked_im[:,2].abs()+1e-4, 0.5).view(b, -1).mean(1)
+            #sharpness_loss += torch.pow(stacked_im[:,0].abs()+stacked_im[:,2].abs()+1e-4, .5).view(b, -1).mean(1)
+            sharpness_loss += torch.pow(stacked_im.abs()+1e-4, .5).view(b, -1).mean(1)
 
             return sharpness_loss,ego_flows_scaled
 
@@ -166,77 +165,6 @@ class sharpness_loss(nn.Module):
             loss=loss+current_loss
             ego_flows.append(ego_flows_scaled)
         return loss,ego_flows
-
-
-
-class two_stage_photometric_reconstruction_loss(nn.Module):
-    def __init__(self):
-        super(two_stage_photometric_reconstruction_loss, self).__init__()
-
-    def forward(self, tgt_img, ref_imgs, intrinsics, intrinsics_inv, depth, explainability_mask,explainability_mask2, pose, pixel_pose,ssim_w=0.,padding_mode='zeros'):
-        def one_scale(depth,explainability_mask,explainability_mask2,pixel_pose):
-
-            reconstruction_loss = 0
-            b, _, h, w = depth.size()
-            downscale = tgt_img.size(2)/h
-            ego_flows_scaled=[]
-            rigid_flows_scaled=[]
-
-            tgt_img_scaled = nn.functional.adaptive_avg_pool2d(tgt_img, (h, w))
-            ref_imgs_scaled = [nn.functional.adaptive_avg_pool2d(ref_img, (h, w)) for ref_img in ref_imgs]
-            intrinsics_scaled = torch.cat((intrinsics[:, 0:2]/downscale, intrinsics[:, 2:]), dim=1)
-            intrinsics_scaled_inv = torch.cat((intrinsics_inv[:, :, 0:2]*downscale, intrinsics_inv[:, :, 2:]), dim=2)
-
-            for i, ref_img in enumerate(ref_imgs_scaled):
-                current_pose1 = pose[:, i]
-
-                ref_img_warped,_,ego_flow = simple_inverse_warp(ref_img, depth[:,0], current_pose1, intrinsics_scaled, intrinsics_scaled_inv, padding_mode)
-                out_of_bound = 1 - (ref_img_warped == 0).prod(1, keepdim=True).type_as(ref_img_warped)
-
-                diff = (tgt_img_scaled - ref_img_warped) * out_of_bound
-                if explainability_mask is not None:
-                    diff = diff * explainability_mask[:,i:i+1].expand_as(diff)
-                if ssim_w>0 and min(ref_img_warped.shape[2:])>11:
-                    ssim_loss = ssim(tgt_img_scaled,ref_img_warped,size_average=False,mask=out_of_bound*explainability_mask[:,i:i+1])
-                else:
-                    ssim_loss=0.
-                reconstruction_loss += diff.abs().view(b,-1).mean(1)+ssim_w*ssim_loss
-
-                current_pose2=pixel_pose[:,i*6:(i+1)*6]
-
-                ref_img_warped,_,rigid_flow = simple_inverse_warp(ref_img, depth[:,0], current_pose2, intrinsics_scaled, intrinsics_scaled_inv, padding_mode)
-                out_of_bound = 1 - (ref_img_warped == 0).prod(1, keepdim=True).type_as(ref_img_warped)
-
-                diff = (tgt_img_scaled - ref_img_warped) * out_of_bound
-                if explainability_mask2 is not None:
-                    diff = diff * explainability_mask2[:,i:i+1].expand_as(diff)
-
-                if ssim_w>0 and min(ref_img_warped.shape[2:])>11:
-                    ssim_loss = ssim(tgt_img_scaled,ref_img_warped,size_average=False,mask=out_of_bound*explainability_mask2[:,i:i+1])
-                else:
-                    ssim_loss=0.
-                reconstruction_loss += diff.abs().view(b,-1).mean(1)+ssim_w*ssim_loss
-                ego_flows_scaled.append(ego_flow)
-                rigid_flows_scaled.append(rigid_flow)
-            return reconstruction_loss, ego_flows_scaled,rigid_flows_scaled
-
-        if type(explainability_mask) not in [tuple, list]:
-            explainability_mask = [explainability_mask]
-        if type(depth) not in [list, tuple]:
-            depth = [depth]
-        if type(pixel_pose) not in [tuple, list]:
-            pixel_pose=[pixel_pose]
-
-        loss = 0
-        ego_flows=[]
-        rigid_flows=[]
-        #depth=depth[:1];explainability_mask=explainability_mask[:1];pose=pose[:1]
-        for d, mask,mask2, p in zip(depth, explainability_mask,explainability_mask2,pixel_pose):
-            current_loss ,ego_flow_scaled,rigid_flow_scaled= one_scale(d, mask,mask2,p)
-            loss=loss+current_loss
-            ego_flows.append(ego_flow_scaled)
-            rigid_flows.append(rigid_flow_scaled)
-        return loss, ego_flows,rigid_flows
 
 
 

@@ -84,11 +84,9 @@ class RandomScaleCrop(object):
             chs=[]
             for c in range(im.shape[2]):
                 chs.append(imresize(im[:,:,c], (scaled_h, scaled_w)))
-                #chs.append(zoom(im[:, :, c], (y_scaling, x_scaling)))
             scaled_images.append(np.stack(chs,axis=2))
 
         #scaled_images = [imresize(im, (scaled_h, scaled_w)) for c  for im in images]
-        scaled_h, scaled_w,_=scaled_images[0].shape
         offset_y = np.random.randint(scaled_h - in_h + 1)
         offset_x = np.random.randint(scaled_w - in_w + 1)
         cropped_images = [im[offset_y:offset_y + in_h, offset_x:offset_x + in_w] for im in scaled_images]
