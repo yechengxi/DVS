@@ -70,11 +70,8 @@ parser.add_argument('--log-full', default='progress_log_full.csv', metavar='PATH
                     help='csv where to save per-gradient descent train stats')
 parser.add_argument('--photo-loss-weight', type=float, help='weight for photometric loss', metavar='W', default=1)
 parser.add_argument('-m', '--mask-loss-weight', type=float, help='weight for explainabilty mask loss', metavar='W', default=0)
-parser.add_argument('--still-loss-weight', type=float, help='weight for still mask loss', metavar='W', default=0.0)
 parser.add_argument('--nls', action='store_true', help='use non-local smoothness')
 parser.add_argument('-s', '--smooth-loss-weight', type=float, help='weight for disparity smoothness loss', metavar='W', default=0.1)
-parser.add_argument('-p','--pose-smooth-loss-weight', type=float, help='weight for pose smoothness loss', metavar='W', default=0.)
-parser.add_argument('-c','--consistency-loss-weight', type=float, help='weight for consistency loss', metavar='W', default=0.0)
 parser.add_argument('-o','--flow-smooth-loss-weight', type=float, help='weight for optical flow smoothness loss', metavar='W', default=0.0)
 parser.add_argument('--ssim-weight', type=float, help='weight for ssim loss', metavar='W', default=0.)
 
@@ -139,39 +136,39 @@ def main():
         #normalize
     ])
 
-    valid_transform = custom_transforms.Compose([#custom_transforms.CropBottom(),
-                                                 custom_transforms.ArrayToTensor(),
+    valid_transform = custom_transforms.Compose([custom_transforms.ArrayToTensor(),
                                                 #normalize
                                                 ])
 
     print("=> fetching scenes in '{}'".format(args.data))
-    #train_set = StackedSequenceFolder(
-    train_set = CloudSequenceFolder(
+    train_set = NewCloudSequenceFolder(
         args.data,
         transform=train_transform,
-        seed=args.seed,
         train=True,
         sequence_length=args.sequence_length,
-        scale=args.scale
     )
 
     # if no Groundtruth is avalaible, Validation set is the same type as training set to measure photometric loss from warping
-    #val_set = StackedSequenceFolder(
-    val_set = CloudSequenceFolder(
+    """
+    val_set = NewCloudSequenceFolder(
         args.data,
         transform=valid_transform,
-        seed=args.seed,
         train=False,
         sequence_length=args.sequence_length,
-        scale=args.scale,
         gt=args.with_gt
     )
-
+    """
+    val_set=train_set
     print('{} samples found in {} train scenes'.format(len(train_set), len(train_set.scenes)))
+    train_set.train=False
+
     print('{} samples found in {} valid scenes'.format(len(val_set), len(val_set.scenes)))
+
+    train_set.train = True
     train_loader = torch.utils.data.DataLoader(
         train_set, batch_size=args.batch_size, shuffle=True,
         num_workers=args.workers, pin_memory=True)
+    train_set.train = False
     val_loader = torch.utils.data.DataLoader(
         val_set, batch_size=args.batch_size, shuffle=False,
         num_workers=args.workers, pin_memory=True)
@@ -263,8 +260,10 @@ def main():
         #errors, error_names = validate_with_gt(args, val_loader, disp_net,pose_exp_net, epoch, output_writers)
 
         # train for one epoch
+        train_set.train = True
         train_loss = train(args, train_loader, net, optimizer, args.epoch_size, training_writer)
         # evaluate on validation set
+        train_set.train = False
         if args.with_gt:
             errors, error_names = validate_with_gt(args, val_loader, net, epoch, output_writers)
         else:
@@ -397,7 +396,6 @@ def train(args, train_loader, net, optimizer, epoch_size,  train_writer):
         if args.training_output_freq > 0 and n_iter % args.training_output_freq == 0:
 
             if tgt_img.shape[1]==3:
-                tgt_img[0]
                 train_writer.add_image('train Input', tensor2array(tgt_img[0],max_value=1,colormap='bone'), n_iter)
 
             for k,scaled_depth in enumerate(depth):
@@ -430,7 +428,7 @@ def train(args, train_loader, net, optimizer, epoch_size,  train_writer):
                                                                 colormap='bone'), n_iter)
 
                         if ego_flows is not None:
-                            ego_flow = flow_to_image(ego_flows[k][j][0].data.cpu().numpy())
+                            ego_flow = flow_to_image(ego_flows[k][j][0].data.cpu().numpy()).transpose(2,0,1)
                             train_writer.add_image('ego flow {} {}'.format(k, j), ego_flow / 255, n_iter)
 
                         train_writer.add_image('train Warped Outputs {} {}'.format(k, j),

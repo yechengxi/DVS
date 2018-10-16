@@ -146,8 +146,8 @@ class sharpness_loss(nn.Module):
                 #print(scaling.view(1,-1))
                 stacked_im = stacked_im + ref_img_warped * in_bound* scaling.view(b, 3, 1, 1)
 
-            #sharpness_loss += torch.pow(stacked_im[:,0].abs()+stacked_im[:,2].abs()+1e-4, .5).view(b, -1).mean(1)
-            sharpness_loss += torch.pow(stacked_im.abs()+1e-4, .5).view(b, -1).mean(1)
+            sharpness_loss += torch.pow(stacked_im[:,0].abs()+stacked_im[:,2].abs()+1e-4, .5).view(b, -1).mean(1)
+            #sharpness_loss += torch.pow(stacked_im.abs()+1e-4, .5).view(b, -1).mean(1)
 
             return sharpness_loss,ego_flows_scaled
 

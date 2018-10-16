@@ -22,7 +22,6 @@ def save_path_formatter(args, parser):
     keys_with_prefix['mask_loss_weight'] = 'm'
     keys_with_prefix['nls'] = 'nls'
     keys_with_prefix['smooth_loss_weight'] = 's'
-    keys_with_prefix['pose_smooth_loss_weight'] = 'p'
     keys_with_prefix['flow_smooth_loss_weight'] = 'o'
 
 
@@ -59,6 +58,10 @@ def tensor2array(tensor, max_value=255, colormap='rainbow'):
     elif tensor.ndimension() == 3:
         assert(tensor.size(0) == 3)
         array = 0.5 + tensor.numpy().transpose(1, 2, 0)*0.5
+
+    #for tensorboardx 1.4
+    array=array.transpose(2,0,1)
+
     return array
 
 
