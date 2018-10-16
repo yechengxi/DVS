@@ -552,23 +552,24 @@ def validate_without_gt(args, val_loader, net, epoch, output_writers=[]):
                                                                               intrinsics_var,
                                                                               intrinsics_inv_var, args.padding_mode)
                 for j in range(len(ref_imgs_var)):
-                    ref_img = ref_imgs_var[j][0]
-                    ref_warped = ref_imgs_warped[j][0]
-                    stacked_im = stacked_im + ref_warped
+                    if j==0 or j== len(ref_imgs_var)-1:
+                        ref_img = ref_imgs_var[j][0]
+                        ref_warped = ref_imgs_warped[j][0]
+                        stacked_im = stacked_im + ref_warped
 
-                    if j == 0 or j == len(ref_imgs_var) - 1:
-                        if explainability_mask is not None:
-                            output_writers[index].add_image('val Exp mask Outputs {}'.format(j),
-                                                            tensor2array(explainability_mask[0, j].data.cpu(),
-                                                                         max_value=1,
-                                                                         colormap='bone'), n_iter)
+                        if j == 0 or j == len(ref_imgs_var) - 1:
+                            if explainability_mask is not None:
+                                output_writers[index].add_image('val Exp mask Outputs {}'.format(j),
+                                                                tensor2array(explainability_mask[0, j].data.cpu(),
+                                                                             max_value=1,
+                                                                             colormap='bone'), n_iter)
 
-                        output_writers[index].add_image('val Warped Outputs {}'.format(j),
-                                                        tensor2array(ref_warped.data.cpu(), colormap='bone',
-                                                                     max_value=1), n_iter)
-                        output_writers[index].add_image('val Diff Outputs {}'.format(j),
-                                                        tensor2array((middle_slice - ref_warped).abs().data.cpu(),
-                                                                     colormap='bone', max_value=1), n_iter)
+                            output_writers[index].add_image('val Warped Outputs {}'.format(j),
+                                                            tensor2array(ref_warped.data.cpu(), colormap='bone',
+                                                                         max_value=1), n_iter)
+                            output_writers[index].add_image('val Diff Outputs {}'.format(j),
+                                                            tensor2array((middle_slice - ref_warped).abs().data.cpu(),
+                                                                         colormap='bone', max_value=1), n_iter)
 
 
             loss = w1*loss_1 + w2*loss_2 + w3*loss_3

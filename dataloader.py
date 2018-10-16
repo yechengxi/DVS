@@ -17,49 +17,23 @@ from scipy.misc import imresize
 
 
 
-global_scale_t = 20 * 255
-global_scale_pn = 100
-global_scale_pp = 100
+global_scale_pn = 20
+global_scale_pp = 20
 global_shape = (200, 346)
 slice_width = 1
 
-
-def dvs_img(cloud, shape):
-    fcloud = cloud.astype(np.float32)  # Important!
-
-    t0 = min(cloud[0][0], cloud[-1][0])
-    timg = np.zeros(shape, dtype=np.float32)
-    cimg = np.zeros(shape, dtype=np.float32)
-    nimg = np.zeros(shape, dtype=np.float32)
-    pimg = np.zeros(shape, dtype=np.float32)
-
-    for e in cloud:
-        x = int(e[1])
-        y = int(e[2])
-        p = 0
-        if (e[3] > 0.5):
-            p = 1
-
-        if (y >= shape[0] or x >= shape[1]):
-            continue
-
-        cimg[y, x] += 1
-        timg[y, x] += (e[0] - t0)
-        if (p > 0):
-            nimg[y, x] += 1
-        else:
-            pimg[y, x] += 1
-
-    timg = np.divide(timg, cimg, out=np.zeros_like(timg), where=cimg != 0)
-
-    cmb = np.dstack((nimg * global_scale_pp, timg * 255 / slice_width, pimg * global_scale_pn))
-
-    return cmb
 
 import sys
 sys.path.insert(0, './build/lib.linux-x86_64-3.6') #The libdvs.so should be in PYTHONPATH!
 import libdvs
 
+import cv2
+def undistort_img(img, K, dist):
+    D = dist
+    Knew = K.copy()
+    Knew[(0,1), (0,1)] = 0.87 * Knew[(0,1), (0,1)]
+    img_undistorted = cv2.fisheye.undistortImage(img, K, D=D, Knew=Knew)
+    return img_undistorted
 
 class CloudSequenceFolder(data.Dataset):
 
@@ -98,10 +72,18 @@ class CloudSequenceFolder(data.Dataset):
         shifts.pop(demi_length)
         for scene in self.scenes:
             f = open(os.path.join(scene, 'cam.txt'), 'r')
+
             import re
             non_decimal = re.compile(r'[^\d. ]+')
             l = [[float(num) for num in non_decimal.sub('', line).split()] for line in f]
             intrinsics = np.asarray(l[:3]).astype(np.float32)
+
+            distort=None
+            if os.path.exists(os.path.join(scene, 'distort.txt')):
+                f = open(os.path.join(scene, 'distort.txt'), 'r')
+                l = [[float(num) for num in non_decimal.sub('', line).split()] for line in f]
+                distort = np.asarray(l[:1]).astype(np.float32)
+
             imgs = sorted(glob.glob(os.path.join(scene, '*.npz')))
 
             split = int(len(imgs) * .8)
@@ -118,7 +100,7 @@ class CloudSequenceFolder(data.Dataset):
                 intrinsics[1] *= self.scale
 
             for i in range( len(imgs) ):
-                sample = {'intrinsics': intrinsics, 'tgt': imgs[i], 'ref_imgs': [], 'depth': self.depths[i]}
+                sample = {'intrinsics': intrinsics,'distort':distort, 'tgt': imgs[i], 'ref_imgs': [], 'depth': self.depths[i]}
                 if self.train or os.path.exists(self.depths[i]) or (not self.gt):
                     sequence_set.append(sample)
 
@@ -145,7 +127,11 @@ class CloudSequenceFolder(data.Dataset):
         cmb[:, :, 0] *= global_scale_pp
         cmb[:, :, 1] *= 255.0 / slice_width
         cmb[:, :, 2] *= global_scale_pn
+        cmb=np.uint8(cmb)
+        cmb=undistort_img(cmb,sample['intrinsics'],sample['distort'])
+        #print(cmb[..., 0].mean(), cmb[..., 1].mean(), cmb[..., 2].mean())
         tgt_img=cmb
+
 
         # store slices
         slices=[]
@@ -159,7 +145,12 @@ class CloudSequenceFolder(data.Dataset):
             cmb[:, :, 0] *= global_scale_pp
             cmb[:, :, 1] *= 255.0 / slice_width
             cmb[:, :, 2] *= global_scale_pn
+
+            cmb = np.uint8(cmb)
+            cmb = undistort_img(cmb, sample['intrinsics'], sample['distort'])
+
             slices.append(cmb)
+
 
         if self.transform is not None:
             imgs, intrinsics = self.transform([tgt_img] +slices, np.copy(sample['intrinsics']))
@@ -176,3 +167,5 @@ class CloudSequenceFolder(data.Dataset):
 
     def __len__(self):
         return len(self.samples)
+
+
