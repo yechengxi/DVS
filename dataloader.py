@@ -81,10 +81,11 @@ def dvs_img(cloud, shape, K, D):
 
 class NewCloudSequenceFolder(data.Dataset):
 
-    def __init__(self, root, train=True, sequence_length=25, transform=None,gt=True):
+    def __init__(self, root, train=True, sequence_length=5,slices=25, transform=None,gt=True):
         self.root = Path(root)
         self.gt = gt
         self.sequence_length=sequence_length
+        self.slices=slices
         self.scenes = []
         self.transform = transform
 
@@ -138,34 +139,44 @@ class NewCloudSequenceFolder(data.Dataset):
 
         cloud = self.cloud[scene_id]
         cloud_idx =self.idx[scene_id]
-        sl, idx = get_slice(cloud, cloud_idx, gt_ts, 0.5, 0, self.discretization[scene_id])
+        sl, idx = get_slice(cloud, cloud_idx, gt_ts, 0.25, 0, self.discretization[scene_id])
 
         cmb = dvs_img(sl, global_shape, self.K[scene_id], self.D[scene_id])
         tgt_img=cmb
+
 
         n_slice = len(idx)
         idx = list(idx) + [len(sl)]
 
         T = int(n_slice / self.sequence_length)
 
-        # store slices
-        slices=[]
+        seqs = []
         for i in range(self.sequence_length):
-            mini_slice = sl[idx[i*T]:idx[(i + 1)*T]]
+            mini_slice = sl[idx[i * T]:idx[(i + 1) * T]]
             cmb = dvs_img(mini_slice, global_shape, self.K[scene_id], self.D[scene_id])
-            slices.append(cmb)
+            seqs.append(cmb)
+
+        slices = []
+        if self.slices>0:
+            T = int(n_slice / self.slices)
+
+            # store slices
+
+            for i in range(self.slices):
+                mini_slice = sl[idx[i*T]:idx[(i + 1)*T]]
+                cmb = dvs_img(mini_slice, global_shape, self.K[scene_id], self.D[scene_id])
+                slices.append(cmb)
 
 
         if self.transform is not None:
-            imgs, intrinsics = self.transform([tgt_img] +slices, np.copy(self.K[scene_id]))
-            tgt_img = imgs[0]
-            slices=imgs[1:]
+            imgs, intrinsics = self.transform(seqs +slices, np.copy(self.K[scene_id]))
+            seqs = imgs[:self.sequence_length]
+            slices=imgs[self.sequence_length:]
 
         else:
             intrinsics = np.copy(self.K[scene_id])
-        #if self.train or (not self.gt):
 
-        return tgt_img, slices, intrinsics, np.linalg.inv(intrinsics)
+        return seqs, slices, intrinsics, np.linalg.inv(intrinsics)
 
     def __len__(self):
         if self.train:

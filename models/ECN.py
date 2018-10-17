@@ -56,62 +56,6 @@ class DoubleConvBlock(nn.Module):
         return out
 
 
-
-
-class RecurrentConvBlockC(nn.Module):
-    # basic convolution block v12
-    def __init__(self, in_planes, out_planes, kernel_size, padding,dropout_rate=0.,norm_type='gn', norm_group=16, n_iter=3):
-        super(RecurrentConvBlockC, self).__init__()
-        self.n_iter=n_iter
-        self.conv1 = nn.Conv2d(in_planes, out_planes, kernel_size=kernel_size, padding=padding, bias=False)
-        self.bn1s=nn.ModuleList()
-
-        if n_iter > 1:
-            self.conv0 = nn.Conv2d(out_planes,in_planes, kernel_size=1, padding=0, bias=False)
-            self.bn0s=nn.ModuleList()
-
-        self.dropouts=nn.ModuleList()
-
-        for i in range(n_iter):
-            self.bn1s.append(nn.BatchNorm2d(in_planes))
-            if norm_type == 'bn':
-                self.bn1s.append(nn.BatchNorm2d(in_planes, momentum=0.1))
-            if norm_type == 'gn':
-                self.bn1s.append(GroupNorm(in_planes, num_groups=norm_group))
-            if norm_type == 'fd':
-                self.bn1s.append(FeatureDecorr(in_planes, num_groups=norm_group))
-
-            if dropout_rate>0:
-                self.dropouts.append(nn.Dropout2d(dropout_rate))
-            if i+1<n_iter:
-                if norm_type == 'bn':
-                    self.bn0s.append(nn.BatchNorm2d(out_planes, momentum=0.1))
-                if norm_type == 'gn':
-                    self.bn0s.append(GroupNorm(out_planes, num_groups=norm_group))
-                if norm_type == 'fd':
-                    self.bn0s.append(FeatureDecorr(out_planes, num_groups=norm_group))
-
-    def forward(self, x):
-        C=x.shape[1]
-        for i in range(self.n_iter):
-            if i > 0:
-                out1 = self.conv0(F.relu(self.bn0s[i-1](out)))
-                out1=F.relu(self.bn1s[i](out1))
-                if len(self.dropouts)>0:
-                    out1=self.dropouts[i](out1)
-                out = out + self.conv1(out1)
-            else:
-                x=F.relu(self.bn1s[i](x))
-                if len(self.dropouts) > 0:
-                    x = self.dropouts[i](x)
-                out = self.conv1(x)
-        return out
-
-
-
-
-
-
 def scaling(maps, scaling_factor=None, output_size=None):
     N, C, H, W = maps.shape
 
@@ -133,16 +77,6 @@ def scaling(maps, scaling_factor=None, output_size=None):
         N, C, H, W = maps.shape
 
     if H != H_t or W != W_t:
-        """
-        # calculate the coordinates of the sampling grid
-        base_grid = maps.new_empty(N, H_t, W_t, 2, requires_grad=False)
-        linear_points = torch.from_numpy(np.linspace(-1., 1., W_t)).type_as(base_grid).to(maps.device)
-        base_grid[..., 0] = linear_points.view(1, 1, -1).repeat(1, H_t, 1).expand_as(base_grid[..., 0])
-        linear_points = torch.from_numpy(np.linspace(-1., 1., H_t)).type_as(base_grid).to(maps.device)
-        base_grid[..., 1] = linear_points.view(1, -1, 1).repeat(1, 1, W_t).expand_as(base_grid[..., 0])
-        # sampled map
-        maps = F.grid_sample(maps, base_grid)
-        """
         maps = F.adaptive_avg_pool2d(maps,(H_t,W_t))
     return maps
 
@@ -313,7 +247,7 @@ class ECN_Disp(nn.Module):
 
 class ECN_Pose(nn.Module):
     def __init__(self, input_size, nb_ref_imgs=2, init_planes=16, scale_factor=0.5, growth_rate=16,
-                 final_map_size=1, output_exp=False,output_exp2=False, output_pixel_pose=False, output_disp=False, alpha=10, beta=0.01,
+                 final_map_size=1, output_exp=False, alpha=10, beta=0.01,
                  norm_type='gn'):
         super(ECN_Pose, self).__init__()
         self.scale_factor = scale_factor
@@ -323,12 +257,9 @@ class ECN_Pose(nn.Module):
 
         self.nb_ref_imgs = nb_ref_imgs
         self.output_exp = output_exp
-        self.output_exp2=output_exp2
-        self.output_pixel_pose = output_pixel_pose
-        self.output_disp = output_disp
         self.alpha = alpha
         self.beta = beta
-        self.pred_planes = nb_ref_imgs * 8 + 1
+        self.pred_planes = nb_ref_imgs
 
         in_planes = (1 + nb_ref_imgs) *3
 
@@ -356,7 +287,7 @@ class ECN_Pose(nn.Module):
 
         in_planes2 = out_planes  # encoder planes
         self.predicts = 4
-        if self.output_exp or self.output_pixel_pose or self.output_disp or self.output_exp2:
+        if self.output_exp:
             planes = []
             for i in range(len(self.encoding_layers) + 1):
                 if i == len(self.encoding_layers):
@@ -410,7 +341,7 @@ class ECN_Pose(nn.Module):
         pose = pose.mean(3).mean(2)
         pose = 0.01 * pose.view(pose.size(0), self.nb_ref_imgs, 6)
 
-        if self.output_exp or self.output_pixel_pose or self.output_disp or self.output_exp2:
+        if self.output_exp:
             decode = [out]
             predicts = []
 
@@ -435,34 +366,10 @@ class ECN_Pose(nn.Module):
         else:
             exps = [None for i in range(self.predicts)]
 
-
-        if self.output_exp2:
-            exps2 = [torch.sigmoid(predicts[i][:, self.nb_ref_imgs:2*self.nb_ref_imgs]) for i in range(self.predicts)]
-        else:
-            exps2 = [None for i in range(self.predicts)]
-
-        if self.output_pixel_pose:
-            pose_tmp = pose.view(pose.size(0), -1, 1, 1)
-            pixel_poses = [0.01 * predicts[i][:, 2*self.nb_ref_imgs:8 * self.nb_ref_imgs] + pose_tmp for i in range(self.predicts)]
-            #for i in range(self.predicts):
-            #    b, c, h, w = exps[i].shape
-            #    exp = exps[i].view(b, self.nb_ref_imgs, 1, h, w).repeat(1, 1, 6, 1, 1).view(b, self.nb_ref_imgs * 6, h,w)
-            #    pixel_poses[i] = pixel_poses[i] * (1 - exp) + exp * pose_tmp
-            #print('ego pose', pose_tmp[i].min().item(), pose_tmp[i].mean().item(), pose_tmp[i].max().item())
-            #for i in range(self.predicts):
-            #   print(i,(pixel_poses[i]- pose_tmp).min().item(),(pixel_poses[i]- pose_tmp).mean().item(),(pixel_poses[i]- pose_tmp).max().item())
-        else:
-            pixel_poses = [None for i in range(self.predicts)]
-
-        if self.output_disp:
-            disps = [self.alpha * torch.sigmoid(predicts[i][:, -1:]) + self.beta for i in range(self.predicts)]
-        else:
-            disps = [None for i in range(self.predicts)]
-
         if self.training:
-            return exps,exps2, pixel_poses, disps, pose
+            return exps, pose
         else:
-            return exps[0],exps2[0], pixel_poses[0], disps[0], pose
+            return exps[0], pose
 
 
 
