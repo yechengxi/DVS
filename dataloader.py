@@ -1,6 +1,5 @@
 import torch.utils.data as data
 import numpy as np
-from scipy.misc import imread
 from path import Path
 import random
 import os
@@ -114,13 +113,13 @@ class NewCloudSequenceFolder(data.Dataset):
         self.test_idx = []
 
         for s, scene in enumerate(self.scenes):
-            self.cloud.append(scene['events'].astype(np.float16))
+            self.cloud.append(scene['events'])#.astype(np.float16)
             self.idx.append(scene['index'])
             self.discretization.append(scene['discretization'])
             self.K.append(scene['K'].astype(np.float32))
             self.D.append(scene['D'].astype(np.float32))
-            #self.depth.append(scene['depth'])
             self.gt_ts.append(scene['gt_ts'])
+            #self.depth.append(scene['depth'])
             #self.flow.append(scene['flow'])
 
             split=int(len(self.gt_ts[-1]) * .8)
@@ -184,8 +183,4 @@ class NewCloudSequenceFolder(data.Dataset):
             return len(self.train_idx)
         else:
             return len(self.test_idx)
-
-
-
-
 
