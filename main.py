@@ -131,17 +131,17 @@ def main():
             output_writers.append(SummaryWriter(args.save_path/'valid'/str(i)))
 
     # Data loading code
-    normalize = custom_transforms.Normalize(mean=[0., 0., 0.],std=[.2,.1,.2])
+    #normalize = custom_transforms.Normalize(mean=[0., 0., 0.],std=[1.,1.,1.])
 
     train_transform = custom_transforms.Compose([
         custom_transforms.RandomHorizontalFlip(),
         custom_transforms.RandomScaleCrop(),
         custom_transforms.ArrayToTensor(),
-        normalize
+        #normalize
     ])
 
     valid_transform = custom_transforms.Compose([custom_transforms.ArrayToTensor(),
-                                                normalize
+                                                #normalize
                                                 ])
 
     print("=> fetching scenes in '{}'".format(args.data))
