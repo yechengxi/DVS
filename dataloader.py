@@ -74,6 +74,7 @@ def dvs_img(cloud, shape, K, D):
     cmb[:,:,1] *= 255.0 / slice_width
     cmb[:,:,2] *= global_scale_pn
 
+    #print(cmb[:,:,0].mean(),cmb[:,:,1].mean(),cmb[:,:,2].mean())
     cmb = np.uint8(cmb)
     cmb = undistort_img(cmb, K, D)
     return cmb
@@ -113,7 +114,7 @@ class NewCloudSequenceFolder(data.Dataset):
         self.test_idx = []
 
         for s, scene in enumerate(self.scenes):
-            self.cloud.append(scene['events'].astype(np.float32))
+            self.cloud.append(scene['events'].astype(np.float16))
             self.idx.append(scene['index'])
             self.discretization.append(scene['discretization'])
             self.K.append(scene['K'].astype(np.float32))

@@ -131,17 +131,17 @@ def main():
             output_writers.append(SummaryWriter(args.save_path/'valid'/str(i)))
 
     # Data loading code
-    #normalize = custom_transforms.Normalize(mean=[0.5, 0.5, 0.5],std=[.5,.5,.5])
+    normalize = custom_transforms.Normalize(mean=[0., 0., 0.],std=[.2,.1,.2])
 
     train_transform = custom_transforms.Compose([
         custom_transforms.RandomHorizontalFlip(),
         custom_transforms.RandomScaleCrop(),
         custom_transforms.ArrayToTensor(),
-        #normalize
+        normalize
     ])
 
     valid_transform = custom_transforms.Compose([custom_transforms.ArrayToTensor(),
-                                                #normalize
+                                                normalize
                                                 ])
 
     print("=> fetching scenes in '{}'".format(args.data))
@@ -362,12 +362,12 @@ def train(args, train_loader, disp_net, pose_exp_net, optimizer, epoch_size,  tr
 
         if args.sharp:
             pose=pose[:,0:1]
-            loss_1,ego_flows = args.sharpness_loss(slices,
+            loss_1,warped_refs,ego_flows = args.sharpness_loss(slices,
                                                     intrinsics_var, intrinsics_inv_var,
                                                     depth, explainability_mask, pose,
                                                     args.padding_mode)
         else:
-            loss_1,ego_flows = args.simple_photometric_reconstruction_loss(tgt_img_var, ref_imgs_var,
+            loss_1,warped_refs,ego_flows = args.simple_photometric_reconstruction_loss(tgt_img_var, ref_imgs_var,
                                                                  intrinsics_var, intrinsics_inv_var,
                                                                  depth, explainability_mask, pose,
                                                                  args.ssim_weight, args.padding_mode)
@@ -427,44 +427,27 @@ def train(args, train_loader, disp_net, pose_exp_net, optimizer, epoch_size,  tr
             for k,scaled_depth in enumerate(depth):
                 train_writer.add_image('train Dispnet Output Normalized {}'.format(k),tensor2array(disparities[k].data[0].cpu(), max_value=None, colormap='bone'),n_iter)
                 b, _, h, w = scaled_depth.size()
-                downscale = tgt_img_var.size(2)/h
 
-
-                intrinsics_scaled = torch.cat((intrinsics_var[:, 0:2]/downscale, intrinsics_var[:, 2:]), dim=1)
-                intrinsics_scaled_inv = torch.cat((intrinsics_inv_var[:, :, 0:2]*downscale, intrinsics_inv_var[:, :, 2:]), dim=2)
+                warped_refs_scaled = warped_refs[k]
 
                 # log warped images along with explainability mask
                 stacked_im = 0.
 
                 if args.sharp:
-                    ref_imgs_scaled = slices
-                    ref_imgs_scaled=[ref[:1] for ref in ref_imgs_scaled]
-                    ref_imgs_scaled = [nn.functional.adaptive_avg_pool2d(ref_img, (h, w)) for ref_img in ref_imgs_scaled]
-                    middle_slice = ref_imgs_scaled[len(ref_imgs_scaled)//2][0]
-                    ref_imgs_warped, grids, ego_flows_scaled = multi_inverse_warp(ref_imgs_scaled, scaled_depth[:1, 0], pose[:1],
-                                                                                  intrinsics_scaled[:1],
-                                                                                  intrinsics_scaled_inv[:1], args.padding_mode)
-
+                    middle_slice = warped_refs_scaled[len(warped_refs_scaled)//2][0]
                 else:
                     tgt_img_scaled = nn.functional.adaptive_avg_pool2d(tgt_img_var, (h, w))
-                    ref_imgs_scaled = [nn.functional.adaptive_avg_pool2d(ref_img, (h, w)) for ref_img in ref_imgs_var]
-
                     middle_slice = tgt_img_scaled[0]
 
-                for j in range(len(ref_imgs_scaled)):
+                for j in range(len(warped_refs_scaled)):
 
-                    if j == 0 or j == len(ref_imgs_scaled) - 1:
+                    if j == 0 or j == len(warped_refs_scaled) - 1:
                         if explainability_mask[k] is not None:
                             train_writer.add_image('train Exp mask Outputs {} {}'.format(k, j),
                                                    tensor2array(explainability_mask[k][0, j].data.cpu(), max_value=1,
                                                                 colormap='bone'), n_iter)
-                        if args.sharp:
-                            ref_warped = ref_imgs_warped[j][0]
-                        else:
-                            ref_warped, _, _ = simple_inverse_warp(ref_imgs_scaled[j][:1], scaled_depth[:1, 0], pose[:1, j],
-                                                                      intrinsics_scaled[:1], intrinsics_scaled_inv[:1],
-                                                                      padding_mode=args.padding_mode)
-                            ref_warped=ref_warped[0]
+
+                        ref_warped = warped_refs_scaled[j][0]
                         stacked_im = stacked_im + ref_warped
 
                         if ego_flows is not None:
@@ -473,7 +456,7 @@ def train(args, train_loader, disp_net, pose_exp_net, optimizer, epoch_size,  tr
 
                         train_writer.add_image('train Warped Outputs {} {}'.format(k, j),
                                                tensor2array(ref_warped.data.cpu(), colormap='bone', max_value=1), n_iter)
-                        #print(ref_warped.shape,middle_slice.shape)
+
                         train_writer.add_image('train Diff Outputs {} {}'.format(k, j),
                                                tensor2array((middle_slice - ref_warped).abs().data.cpu(), colormap='bone',
                                                             max_value=1.), n_iter)
@@ -556,12 +539,12 @@ def validate_without_gt(args, val_loader, disp_net, pose_exp_net, epoch, output_
 
             if args.sharp:
                 pose=pose[:, 0:1]
-                loss_1,ego_flows = args.sharpness_loss(slices,
+                loss_1,warped_refs,ego_flows = args.sharpness_loss(slices,
                                                          intrinsics_var, intrinsics_inv_var,
                                                          depth, explainability_mask, pose,
                                                         args.padding_mode)
             else:
-                loss_1,ego_flows = args.simple_photometric_reconstruction_loss(tgt_img_var, ref_imgs_var,
+                loss_1,warped_refs,ego_flows = args.simple_photometric_reconstruction_loss(tgt_img_var, ref_imgs_var,
                                                          intrinsics_var, intrinsics_inv_var,
                                                          depth, explainability_mask, pose,
                                                          args.ssim_weight,args.padding_mode)
@@ -593,35 +576,21 @@ def validate_without_gt(args, val_loader, disp_net, pose_exp_net, epoch, output_
                 output_writers[index].add_image('val Depth Output Normalized', tensor2array(1./disp.data[0].cpu(), max_value=None), epoch)
                 # log warped images along with explainability mask
 
-                # log warped images along with explainability mask
                 stacked_im = 0.
 
+                warped_refs=warped_refs[0]
 
                 if args.sharp:
-                    ref_imgs_var = slices
-                    ref_imgs_var=[ref[:1] for ref in ref_imgs_var]
-                    middle_slice = ref_imgs_var[len(ref_imgs_var)//2][0]
-
-
-                    ref_imgs_warped, grids, ego_flows_scaled = multi_inverse_warp(ref_imgs_var,
-                                                                                  depth[:1, 0], pose[:1],
-                                                                                  intrinsics_var[:1],
-                                                                                  intrinsics_inv_var[:1],
-                                                                                  args.padding_mode)
+                    middle_slice = warped_refs[len(warped_refs)//2][0]
                 else:
                     middle_slice = tgt_img_var[0]
 
+
                 for j in range(len(ref_imgs_var)):
                     if j==0 or j== len(ref_imgs_var)-1:
+                        ref_warped=warped_refs[j][0]
 
-                        if args.sharp:
-                            ref_warped = ref_imgs_warped[j][0]
-                        else:
-                            ref_warped, _, _ = simple_inverse_warp(ref_imgs_var[j][:1], depth[:1, 0], pose[:1, j],
-                                                                   intrinsics_var[:1], intrinsics_inv_var[:1],
-                                                                  padding_mode=args.padding_mode)
-                            ref_warped=ref_warped[0]
-                        stacked_im = stacked_im + ref_warped
+                        stacked_im = stacked_im +ref_warped
 
                         if j == 0 or j == len(ref_imgs_var) - 1:
                             if explainability_mask is not None:
