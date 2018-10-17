@@ -1,7 +1,5 @@
 import torch.utils.data as data
 import numpy as np
-from multiprocessing import Pool
-from scipy.misc import imread
 from path import Path
 import random
 import os
@@ -135,8 +133,6 @@ class NewCloudSequenceFolder(data.Dataset):
             tmp=self.gt_ts[id][split:]
             self.test_idx += list(zip([id for i in range(len(tmp))],tmp))
 
-        #self.scenes=[np.load(scene) for scene in self.scenes]
-
 
     def load_scene_by_id(self, id):
         scene = np.load(self.scenes[id])
@@ -200,8 +196,4 @@ class NewCloudSequenceFolder(data.Dataset):
             return len(self.train_idx)
         else:
             return len(self.test_idx)
-
-
-
-
 

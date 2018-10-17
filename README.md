@@ -4,7 +4,7 @@ CMD:
 
 Latest:  
 
-python main.py /home/cxy/Data/DVS/cloud/ --batch-size 4 -f 50 --lr 1e-3  -s0.05 --sequence-length 25 --log-output --sharp  --norm-type gn
+python main.py /home/cxy/Data/DVS/cloud/ --batch-size 4 -f 50 --lr 1e-3  -s0.05 --sequence-length 5 --slices 25 --log-output --sharp  --norm-type gn
 
 
 Old:
