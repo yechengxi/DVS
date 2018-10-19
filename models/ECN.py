@@ -14,6 +14,8 @@ class SingleConvBlock(nn.Module):
         self.bn1s = None
         if norm_type == 'bn':
             self.bn1s = nn.BatchNorm2d(in_planes,momentum=0.1)
+        if norm_type == 'in':
+            self.bn1s = nn.InstanceNorm2d(in_planes, affine=True)
         if norm_type == 'gn':
             self.bn1s = GroupNorm(in_planes, num_groups=norm_group)
         if norm_type == 'fd':
@@ -39,6 +41,9 @@ class DoubleConvBlock(nn.Module):
         if norm_type == 'bn':
             self.bn1s = nn.BatchNorm2d(in_planes,momentum=0.1)
             self.bn2s = nn.BatchNorm2d(out_planes, momentum=0.1)
+        if norm_type == 'in':
+            self.bn1s = nn.InstanceNorm2d(in_planes, affine=True)
+            self.bn2s = nn.InstanceNorm2d(out_planes, affine=True)
         if norm_type == 'gn':
             self.bn1s = GroupNorm(in_planes, num_groups=norm_group)
             self.bn2s = GroupNorm(out_planes, num_groups=norm_group)
@@ -98,15 +103,12 @@ class CascadeLayer(nn.Module):
     """
     This function continuously samples the feature maps
     """
-
     def __init__(self, in_planes, out_planes, kernel_size=3, scale_factor=None, dropout_rate=0. ,norm_type='gn', norm_group=16,n_iter=2):
         super(CascadeLayer, self).__init__()
         self.scale_factor = scale_factor
         self.ConvBlock = DoubleConvBlock(in_planes, out_planes, kernel_size, int((kernel_size - 1) / 2),
                                          norm_type=norm_type)
-        #self.ConvBlock=RecurrentConvBlockC(in_planes, out_planes, kernel_size, int((kernel_size - 1) / 2),dropout_rate=dropout_rate,norm_type=norm_type,n_iter=n_iter)
     def forward(self, x, output_size=None):
-
         out = self.ConvBlock(x)
         out = cascade(out, x)
         if self.scale_factor is not None:
@@ -123,8 +125,6 @@ class InvertedCascadeLayer(nn.Module):
         self.ConvBlock1 = SingleConvBlock(in_planes, out_planes, kernel_size, padding, norm_type=norm_type)
         self.ConvBlock2 = SingleConvBlock(in_planes2 + out_planes, out_planes, kernel_size, padding,
                                           norm_type=norm_type)
-        #self.ConvBlock1 = RecurrentConvBlockC(in_planes, out_planes, kernel_size, int((kernel_size - 1) / 2),dropout_rate=dropout_rate,norm_type=norm_type,n_iter=n_iter)
-        #self.ConvBlock2 = RecurrentConvBlockC(in_planes2 + out_planes, out_planes, kernel_size, int((kernel_size - 1) / 2),dropout_rate=dropout_rate,norm_type=norm_type,n_iter=n_iter)
 
     def forward(self, x, x2):
         x = scaling(x, output_size=x2.shape)
@@ -188,7 +188,13 @@ class ECN_Disp(nn.Module):
         self.predicts=4
         self.predict_maps = nn.ModuleList()
         for i in range(self.predicts):
-            self.predict_maps.append(SingleConvBlock(planes[i], 1, kernel_size=3, padding=1, norm_type=norm_type))
+            if False:
+                self.predict_maps.append(SingleConvBlock(planes[i], 1, kernel_size=3, padding=1, norm_type=norm_type))
+            else:
+                self.predict_maps.append(
+                nn.Sequential(SingleConvBlock(planes[i], 1, kernel_size=3, padding=1, norm_type=norm_type),
+                              nn.BatchNorm2d(1,affine=True))
+            )
 
     def init_weights(self):
 
@@ -200,6 +206,9 @@ class ECN_Disp(nn.Module):
                 if m.bias is not None:
                     m.bias.data.zero_()
             elif isinstance(m, nn.BatchNorm2d):
+                nn.init.constant_(m.weight, 1)
+                nn.init.constant_(m.bias, 0)
+            elif isinstance(m, nn.InstanceNorm2d):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
             elif isinstance(m, nn.Linear):
@@ -225,9 +234,11 @@ class ECN_Disp(nn.Module):
 
             j = len(self.decoding_layers) - i
             if j <= self.predicts:
-                pred = self.predict_maps[j - 1](decode[-1])
+                pred = self.predict_maps[j - 1](decode[-1])#/math.sqrt(decode[-1].shape[1])
+                #print(i,'p',pred.min().item(),pred.mean().item(),pred.max().item())
                 predicts.append(pred)
-                if len(predicts) > 1:
+
+                if True:#len(predicts) > 1:
                     if len(predicts) > 1:
                         predicts[-1] = predicts[-1] + scaling(predicts[-2],output_size=predicts[-1].shape)  # residual learning
                     decode[-1] = torch.cat([decode[-1][:, :self.pred_planes] + predicts[-1], decode[-1][:, self.pred_planes:]],dim=1)  # residual learning
@@ -305,9 +316,15 @@ class ECN_Pose(nn.Module):
 
 
             self.predict_maps = nn.ModuleList()
+
             for i in range(self.predicts):
-                self.predict_maps.append(
-                    SingleConvBlock(planes[i], self.pred_planes, kernel_size=3, padding=1, norm_type=norm_type))
+                if False:
+                    self.predict_maps.append(SingleConvBlock(planes[i], self.pred_planes, kernel_size=3, padding=1, norm_type=norm_type))
+                else:
+                    self.predict_maps.append(
+                    nn.Sequential(SingleConvBlock(planes[i], self.pred_planes, kernel_size=3, padding=1, norm_type=norm_type),
+                                  nn.BatchNorm2d(self.pred_planes,affine=True))
+                )
 
     def init_weights(self):
 
@@ -317,6 +334,12 @@ class ECN_Pose(nn.Module):
                 # nn.init.kaiming_normal_(m.weight)
                 if m.bias is not None:
                     m.bias.data.zero_()
+            elif isinstance(m, nn.InstanceNorm2d):
+                nn.init.constant_(m.weight, 1)
+                nn.init.constant_(m.bias, 0)
+            elif isinstance(m, nn.BatchNorm2d):
+                nn.init.constant_(m.weight, 1)
+                nn.init.constant_(m.bias, 0)
             elif isinstance(m, nn.Linear):
                 nn.init.xavier_uniform_(m.weight)
                 if m.bias is not None:

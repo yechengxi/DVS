@@ -150,7 +150,8 @@ def main():
         transform=train_transform,
         train=True,
         sequence_length=args.sequence_length,
-        slices=args.slices
+        slices=args.slices,
+        gt=args.with_gt
     )
 
     # if no Groundtruth is avalaible, Validation set is the same type as training set to measure photometric loss from warping
@@ -362,6 +363,7 @@ def train(args, train_loader, disp_net, pose_exp_net, optimizer, epoch_size,  tr
 
         if args.sharp:
             pose=pose[:,0:1]
+            explainability_mask=[m[:,:1] for m in explainability_mask]
             loss_1,warped_refs,ego_flows = args.sharpness_loss(slices,
                                                     intrinsics_var, intrinsics_inv_var,
                                                     depth, explainability_mask, pose,
@@ -443,9 +445,10 @@ def train(args, train_loader, disp_net, pose_exp_net, optimizer, epoch_size,  tr
 
                     if j == 0 or j == len(warped_refs_scaled) - 1:
                         if explainability_mask[k] is not None:
-                            train_writer.add_image('train Exp mask Outputs {} {}'.format(k, j),
-                                                   tensor2array(explainability_mask[k][0, j].data.cpu(), max_value=1,
-                                                                colormap='bone'), n_iter)
+                            if not args.sharp or j==0:
+                                train_writer.add_image('train Exp mask Outputs {} {}'.format(k, j),
+                                                       tensor2array(explainability_mask[k][0, j].data.cpu(), max_value=1,
+                                                                    colormap='bone'), n_iter)
 
                         ref_warped = warped_refs_scaled[j][0]
                         stacked_im = stacked_im + ref_warped
@@ -539,6 +542,7 @@ def validate_without_gt(args, val_loader, disp_net, pose_exp_net, epoch, output_
 
             if args.sharp:
                 pose=pose[:, 0:1]
+                explainability_mask = explainability_mask[:,:1]
                 loss_1,warped_refs,ego_flows = args.sharpness_loss(slices,
                                                          intrinsics_var, intrinsics_inv_var,
                                                          depth, explainability_mask, pose,
@@ -594,10 +598,11 @@ def validate_without_gt(args, val_loader, disp_net, pose_exp_net, epoch, output_
 
                         if j == 0 or j == len(ref_imgs_var) - 1:
                             if explainability_mask is not None:
-                                output_writers[index].add_image('val Exp mask Outputs {}'.format(j),
-                                                                tensor2array(explainability_mask[0, j].data.cpu(),
-                                                                             max_value=1,
-                                                                             colormap='bone'), n_iter)
+                                if not args.sharp or j == 0:
+                                    output_writers[index].add_image('val Exp mask Outputs {}'.format(j),
+                                                                    tensor2array(explainability_mask[0, j].data.cpu(),
+                                                                                 max_value=1,
+                                                                                 colormap='bone'), n_iter)
 
                             output_writers[index].add_image('val Warped Outputs {}'.format(j),
                                                             tensor2array(ref_warped.data.cpu(), colormap='bone',
@@ -644,12 +649,12 @@ def validate_without_gt(args, val_loader, disp_net, pose_exp_net, epoch, output_
 
     return losses.avg, ['Total loss', 'Photo loss', 'Exp loss']
 
+from models import scaling
 
 def validate_with_gt(args, val_loader, disp_net, pose_exp_net, epoch, output_writers=[]):
     batch_time = AverageMeter()
     error_names = ['abs_diff', 'abs_rel', 'sq_rel', 'a1', 'a2', 'a3']
     errors_s = AverageMeter(i=len(error_names))
-    errors_m = AverageMeter(i=len(error_names))
     log_outputs = len(output_writers) > 0
     if log_outputs:
         log_freq=len(val_loader)//len(output_writers)
@@ -661,25 +666,29 @@ def validate_with_gt(args, val_loader, disp_net, pose_exp_net, epoch, output_wri
     start_time = time.time()
 
     end = time.time()
-    for i, (tgt_img,ref_imgs,intrinsics,intrinsics_inv, depth) in enumerate(val_loader):
+    for i, (seqs,slices,intrinsics,intrinsics_inv, depth) in enumerate(val_loader):
         with torch.no_grad():
+            tgt_img = seqs.pop((args.sequence_length - 1) // 2)
+            ref_imgs = seqs
+
             tgt_img_var = tgt_img.cuda()
             ref_imgs_var = [img.cuda() for img in ref_imgs]
+            if args.sharp:
+                slices = [img.cuda() for img in slices]
+
             intrinsics_var = intrinsics.cuda()
             intrinsics_inv_var = intrinsics_inv.cuda()
+
+
             depth = depth.cuda()
 
             # compute output
-            output_disp_s = disp_net(tgt_img_var)
-            output_disp_s=scaling(output_disp_s,output_size=depth.unsqueeze(1).shape)
+            output_disp = disp_net(tgt_img_var)
+            output_disp=scaling(output_disp,output_size=depth.unsqueeze(1).shape)
 
-            output_depth_s = 1/output_disp_s
+            output_depth = 1/output_disp
+            explainability_mask, pose = pose_exp_net(tgt_img_var, ref_imgs_var)
 
-
-            explainability_mask, explainability_mask2, pixel_pose, output_disp_m, pose = pose_exp_net(tgt_img_var, ref_imgs_var)
-
-            output_depth = output_depth_s
-            output_disp = output_disp_s
 
             if log_outputs and i % log_freq == 0 and i/log_freq < len(output_writers):
                 index = int(i//log_freq)
@@ -696,15 +705,10 @@ def validate_with_gt(args, val_loader, disp_net, pose_exp_net, epoch, output_wri
                     disp_to_show = (1/depth_to_show).clamp(0,10)
                     output_writers[index].add_image('val target Disparity Normalized', tensor2array(disp_to_show, max_value=None, colormap='bone'), epoch)
 
-                output_writers[index].add_image('val Dispnet Output Normalized', tensor2array(output_disp_s.data[0].cpu(), max_value=None, colormap='bone'), epoch)
-                if output_disp_m is not None:
-                    output_writers[index].add_image('val Disp2 Output Normalized',
-                                                    tensor2array(output_disp_m.data[0].cpu(), max_value=None,
-                                                                 colormap='bone'), epoch)
+                output_writers[index].add_image('val Dispnet Output Normalized', tensor2array(output_disp.data[0].cpu(), max_value=None, colormap='bone'), epoch)
+                output_writers[index].add_image('val Depth Output', tensor2array(output_depth.data[0].cpu(), max_value=3), epoch)
 
-                output_writers[index].add_image('val Depth Output', tensor2array(output_depth_s.data[0].cpu(), max_value=3), epoch)
-
-            errors_tmp=compute_errors(depth, output_depth_s.data)
+            errors_tmp=compute_errors(depth, output_depth.data)
             errors_tmp = [e.item() if isinstance(e, torch.Tensor) else e for e in errors_tmp]
             errors_s.update(errors_tmp)
 

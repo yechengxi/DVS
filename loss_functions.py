@@ -101,9 +101,11 @@ class sharpness_loss(nn.Module):
                 scaling = ref_img.view(b, 3, -1).mean(-1) / (1e-5 + ref_img_warped.view(b, 3, -1).mean(-1))
                 #print(scaling.view(1,-1))
                 stacked_im = stacked_im + ref_img_warped * in_bound* scaling.view(b, 3, 1, 1)
-
-            sharpness_loss += torch.pow(stacked_im[:,0].abs()+stacked_im[:,2].abs()+1e-4, .5).view(b, -1).mean(1)
-            #sharpness_loss += torch.pow(stacked_im.abs()+1e-4, .5).view(b, -1).mean(1)
+            stacked_im=torch.pow(stacked_im.abs()+1e-4, .5)
+            if explainability_mask is not None:
+                stacked_im = stacked_im * explainability_mask[:, 0:1]
+            stacked_im=stacked_im[:,0]+stacked_im[:,2]#take the event channels
+            sharpness_loss += stacked_im.view(b, -1).mean(1)
 
             return sharpness_loss,ref_imgs_warped,ego_flows_scaled
 

@@ -4,8 +4,7 @@ CMD:
 
 Latest:  
 
-python main.py /home/cxy/Data/DVS/cloud/ --batch-size 4 -f 50 --lr 1e-3  -s0.05 --sequence-length 5 --slices 25 --log-output --sharp  --norm-type gn
-
+CUDA_VISIBLE_DEVICES=0 python main.py  /home/cxy/Data/DVS/cloud -m.5 --batch-size 8 -f 50 --lr 1e-3  -s0.05  --sequence-length 5  --log-output --norm-type gn --slices 25 --sharp --with-gt
 
 Old:
 Training with 4 gpus on vulcan server:

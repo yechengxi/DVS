@@ -15,6 +15,7 @@ def save_path_formatter(args, parser):
     folder_string.append('{}epochs'.format(args_dict['epochs']))
     keys_with_prefix = OrderedDict()
     keys_with_prefix['sequence_length'] = 'seq'
+    keys_with_prefix['slices'] = 'sl'
     keys_with_prefix['batch_size'] = 'b'
     keys_with_prefix['lr_scheduler'] = ''
     keys_with_prefix['optimizer'] = ''

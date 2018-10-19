@@ -77,21 +77,20 @@ def dvs_img(cloud, shape, K, D):
 
     #print("Float:",nz_avg(cmb, 0), nz_avg(cmb, 1), nz_avg(cmb, 2))
 
-    cmb[:,:,0] *= 20
+    cmb[:,:,0] *= 50
     cmb[:,:,1] *= 255.0 / 0.05
-    cmb[:,:,2] *= 20
+    cmb[:,:,2] *= 50
 
     cmb = undistort_img(cmb, K, D)
     cmb = np.uint8(cmb)
 
     #print("Int:",nz_avg(cmb, 0), nz_avg(cmb, 1), nz_avg(cmb, 2))
-
     return cmb
 
 
 class NewCloudSequenceFolder(data.Dataset):
 
-    def __init__(self, root, train=True, sequence_length=5,slices=25, transform=None,gt=True):
+    def __init__(self, root, train=True, sequence_length=5,slices=25, transform=None,gt=False):
         self.root = Path(root)
         self.gt = gt
         self.sequence_length=sequence_length
@@ -133,15 +132,22 @@ class NewCloudSequenceFolder(data.Dataset):
             tmp=self.gt_ts[id][split:]
             self.test_idx += list(zip([id for i in range(len(tmp))],tmp))
 
+            if self.gt:#only save the portion we use
+                self.depth[id] = self.depth[id][split:]
+
+        if self.gt:
+            import itertools
+            self.depth= list(itertools.chain(*self.depth))
 
     def load_scene_by_id(self, id):
         scene = np.load(self.scenes[id])
-        self.cloud[id]          = scene['events'].astype(np.float32)
+        self.cloud[id]          = scene['events']#.astype(np.float32)
         self.idx[id]            = scene['index']
         self.discretization[id] = scene['discretization']
         self.K[id]              = scene['K'].astype(np.float32)
         self.D[id]              = scene['D'].astype(np.float32)
-        #self.depth[id]          = scene['depth']
+        if self.gt:
+            self.depth[id]          = scene['depth'].astype(np.float32)
         self.gt_ts[id]          = scene['gt_ts']
         #self.flow[id]           = scene['flow']
         #self.scenes[id]         = scene
@@ -172,24 +178,24 @@ class NewCloudSequenceFolder(data.Dataset):
         slices = []
         if self.slices>0:
             T = int(n_slice / self.slices)
-
             # store slices
-
             for i in range(self.slices):
                 mini_slice = sl[idx[i*T]:idx[(i + 1)*T]]
                 cmb = dvs_img(mini_slice, global_shape, self.K[scene_id], self.D[scene_id])
                 slices.append(cmb)
 
-
         if self.transform is not None:
             imgs, intrinsics = self.transform(seqs +slices, np.copy(self.K[scene_id]))
             seqs = imgs[:self.sequence_length]
             slices=imgs[self.sequence_length:]
-
         else:
             intrinsics = np.copy(self.K[scene_id])
 
-        return seqs, slices, intrinsics, np.linalg.inv(intrinsics)
+        if self.gt and (not self.train):
+            depth=self.depth[index]
+            return seqs, slices, intrinsics, np.linalg.inv(intrinsics),depth
+        else:
+            return seqs, slices, intrinsics, np.linalg.inv(intrinsics)
 
     def __len__(self):
         if self.train:
