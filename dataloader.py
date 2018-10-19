@@ -106,6 +106,7 @@ class NewCloudSequenceFolder(data.Dataset):
             for filename in fnmatch.filter(filenames, '*.npz'):
                 self.scenes.append(os.path.join(root, filename))
         self.scenes = sorted(self.scenes)
+        #self.scenes=self.scenes[:2]
         self.n_scenes = len(self.scenes)
 
         self.cloud          = [None] * self.n_scenes
@@ -136,8 +137,7 @@ class NewCloudSequenceFolder(data.Dataset):
                 self.depth[id] = self.depth[id][split:]
 
         if self.gt:
-            import itertools
-            self.depth= list(itertools.chain(*self.depth))
+            self.depth= np.concatenate(self.depth,axis=0)
 
     def load_scene_by_id(self, id):
         scene = np.load(self.scenes[id])
@@ -201,5 +201,7 @@ class NewCloudSequenceFolder(data.Dataset):
         if self.train:
             return len(self.train_idx)
         else:
+            if self.gt:
+                assert len(self.test_idx)==self.depth.shape[0]
             return len(self.test_idx)
 
