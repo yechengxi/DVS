@@ -188,7 +188,7 @@ class ECN_Disp(nn.Module):
         self.predicts=4
         self.predict_maps = nn.ModuleList()
         for i in range(self.predicts):
-            if False:
+            if True:
                 self.predict_maps.append(SingleConvBlock(planes[i], 1, kernel_size=3, padding=1, norm_type=norm_type))
             else:
                 self.predict_maps.append(
@@ -318,7 +318,7 @@ class ECN_Pose(nn.Module):
             self.predict_maps = nn.ModuleList()
 
             for i in range(self.predicts):
-                if False:
+                if True:
                     self.predict_maps.append(SingleConvBlock(planes[i], self.pred_planes, kernel_size=3, padding=1, norm_type=norm_type))
                 else:
                     self.predict_maps.append(

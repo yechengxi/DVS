@@ -11,6 +11,7 @@ import sys
 sys.path.insert(0, './build/lib.linux-x86_64-3.6') #The libdvs.so should be in PYTHONPATH!
 import pydvs
 
+from multiprocessing import Pool
 
 global_shape = (200, 346)
 
@@ -88,82 +89,115 @@ def dvs_img(cloud, shape, K, D):
     return cmb
 
 
+def load_scene_p(queue,scene_path,with_gt=False):
+    scene_npz = np.load(scene_path)
+    scene = {}
+    scene['events']= scene_npz['events']#.astype(np.float32)
+    scene['index']= scene_npz['index']
+    scene['discretization']= scene_npz['discretization']
+    scene['K']= scene_npz['K'].astype(np.float32)
+    scene['D']= scene_npz['D'].astype(np.float32)
+    if with_gt:
+        scene['depth'] = scene_npz['depth'].astype(np.float32)
+    scene['gt_ts']= scene_npz['gt_ts']
+    #scene['flow']= scene_npz['flow']
+    queue.put(scene)
+
+
+def load_scene_s(scene_path, with_gt=False):
+    scene_npz = np.load(scene_path)
+    scene = {}
+    scene['events'] = scene_npz['events']  # .astype(np.float32)
+    scene['index'] = scene_npz['index']
+    scene['discretization'] = scene_npz['discretization']
+    scene['K'] = scene_npz['K'].astype(np.float32)
+    scene['D'] = scene_npz['D'].astype(np.float32)
+    if with_gt:
+        scene['depth'] = scene_npz['depth'].astype(np.float32)
+    scene['gt_ts'] = scene_npz['gt_ts']
+    # scene['flow']= scene_npz['flow']
+    return scene
+
 class NewCloudSequenceFolder(data.Dataset):
 
-    def __init__(self, root, train=True, sequence_length=5,slices=25, transform=None,gt=False):
+    def __init__(self, root, train=True, sequence_length=5,slices=25, train_transform=None,test_transform=None,gt=False):
         self.root = Path(root)
         self.gt = gt
         self.sequence_length=sequence_length
         self.slices=slices
         self.scenes = []
-        self.transform = transform
+        self.train_transform = train_transform
+        self.test_transform = test_transform
 
+        scenes=[]
         if train:
             self.train = True
         else:
             self.train = False
         for root, dirnames, filenames in os.walk(root):
             for filename in fnmatch.filter(filenames, '*.npz'):
-                self.scenes.append(os.path.join(root, filename))
-        self.scenes = sorted(self.scenes)
-        #self.scenes=self.scenes[:2]
-        self.n_scenes = len(self.scenes)
+                scenes.append(os.path.join(root, filename))
+        scenes = sorted(scenes)
+        #self.scenes=self.scenes[:1]
+        self.n_scenes = len(scenes)
 
-        self.cloud          = [None] * self.n_scenes
-        self.idx            = [None] * self.n_scenes
-        self.discretization = [None] * self.n_scenes
-        self.K              = [None] * self.n_scenes
-        self.D              = [None] * self.n_scenes
-        self.depth          = [None] * self.n_scenes
-        self.gt_ts          = [None] * self.n_scenes
-        self.flow           = [None] * self.n_scenes
+        self.scenes=[None] * self.n_scenes
 
         self.train_idx = []
         self.test_idx = []
 
-        for id in range(self.n_scenes):
-            self.load_scene_by_id(id)
+
+        import time
+
+        if False:
+            from multiprocessing import Process,Queue
+            t_s=time.time()
+            queue = Queue()
+            procs = []
+            for id in range(self.n_scenes):
+                print('scene: ',id)
+                proc = Process(target=load_scene_p, args=(queue,scenes[id],self.gt))
+                procs.append(proc)
+                proc.start()
+            self.scenes=[queue.get() for p in procs]
+            for p in procs:
+                p.join()
+                print('join')
+            t_e  = time.time()
+
+            print('loading time:', t_e-t_s)
+        else:
+            t_s = time.time()
+            for id in range(self.n_scenes):
+                self.scenes[id]=load_scene_s(scenes[id],self.gt)
+            t_e  = time.time()
+            print('loading time:', t_e-t_s)
 
         for id in range(self.n_scenes):
-            split = int(len(self.gt_ts[id]) * .8)
+            split = int(len(self.scenes[id]['gt_ts']) * .8)
+            tmp=[i for i in range(len(self.scenes[id]['gt_ts']))]
+            self.scenes[id]['n_train']=len(tmp[:split])
+            self.scenes[id]['n_test'] = len(tmp[split:])
 
-            tmp=self.gt_ts[id][:split]
-            self.train_idx += list(zip([id for i in range(len(tmp))],tmp))
-
-            tmp=self.gt_ts[id][split:]
-            self.test_idx += list(zip([id for i in range(len(tmp))],tmp))
+            self.train_idx += list(zip([id for i in range(len(tmp[:split]))],tmp[:split]))
+            self.test_idx += list(zip([id for i in range(len(tmp[split:]))],tmp[split:]))
 
             if self.gt:#only save the portion we use
-                self.depth[id] = self.depth[id][split:]
+                self.scenes[id]['depth'] = self.scenes[id]['depth'][split:]
+                self.scenes[id]['depth'][np.isnan(self.scenes[id]['depth'])]=0. #set nan to 0
 
-        if self.gt:
-            self.depth= np.concatenate(self.depth,axis=0)
-
-    def load_scene_by_id(self, id):
-        scene = np.load(self.scenes[id])
-        self.cloud[id]          = scene['events']#.astype(np.float32)
-        self.idx[id]            = scene['index']
-        self.discretization[id] = scene['discretization']
-        self.K[id]              = scene['K'].astype(np.float32)
-        self.D[id]              = scene['D'].astype(np.float32)
-        if self.gt:
-            self.depth[id]          = scene['depth'].astype(np.float32)
-        self.gt_ts[id]          = scene['gt_ts']
-        #self.flow[id]           = scene['flow']
-        #self.scenes[id]         = scene
 
 
     def __getitem__(self, index):
         if self.train:
-            scene_id, gt_ts = self.train_idx[index]
+            scene_id, index = self.train_idx[index]
         else:
-            scene_id, gt_ts = self.test_idx[index]
+            scene_id, index = self.test_idx[index]
+        gt_ts=self.scenes[scene_id]['gt_ts'][index]
 
-        cloud = self.cloud[scene_id]
-        cloud_idx =self.idx[scene_id]
-        sl, idx = get_slice(cloud, cloud_idx, gt_ts, 0.25, 0, self.discretization[scene_id])
-
-        #cmb = dvs_img(sl, global_shape, self.K[scene_id], self.D[scene_id])
+        cloud = self.scenes[scene_id]['events']
+        cloud_idx =self.scenes[scene_id]['index']
+        sl, idx = get_slice(cloud, cloud_idx, gt_ts, 0.25, 2, self.scenes[scene_id]['discretization'])
 
         n_slice = len(idx)
         idx = list(idx) + [len(sl)]
@@ -172,7 +206,7 @@ class NewCloudSequenceFolder(data.Dataset):
         seqs = []
         for i in range(self.sequence_length):
             mini_slice = sl[idx[i * T]:idx[(i + 1) * T]]
-            cmb = dvs_img(mini_slice, global_shape, self.K[scene_id], self.D[scene_id])
+            cmb = dvs_img(mini_slice, global_shape, self.scenes[scene_id]['K'], self.scenes[scene_id]['D'])
             seqs.append(cmb)
 
         slices = []
@@ -181,18 +215,25 @@ class NewCloudSequenceFolder(data.Dataset):
             # store slices
             for i in range(self.slices):
                 mini_slice = sl[idx[i*T]:idx[(i + 1)*T]]
-                cmb = dvs_img(mini_slice, global_shape, self.K[scene_id], self.D[scene_id])
+                cmb = dvs_img(mini_slice, global_shape,  self.scenes[scene_id]['K'], self.scenes[scene_id]['D'])
                 slices.append(cmb)
 
+        if  self.train:
+            self.transform=self.train_transform
+        else:
+            self.transform=self.test_transform
+
         if self.transform is not None:
-            imgs, intrinsics = self.transform(seqs +slices, np.copy(self.K[scene_id]))
+            imgs, intrinsics = self.transform(seqs +slices, np.copy(self.scenes[scene_id]['K']))
             seqs = imgs[:self.sequence_length]
             slices=imgs[self.sequence_length:]
         else:
-            intrinsics = np.copy(self.K[scene_id])
+            intrinsics = np.copy(self.scenes[scene_id]['K'])
+
 
         if self.gt and (not self.train):
-            depth=self.depth[index]
+            index-=self.scenes[scene_id]['n_train']
+            depth=self.scenes[scene_id]['depth'][index]
             return seqs, slices, intrinsics, np.linalg.inv(intrinsics),depth
         else:
             return seqs, slices, intrinsics, np.linalg.inv(intrinsics)
@@ -201,7 +242,5 @@ class NewCloudSequenceFolder(data.Dataset):
         if self.train:
             return len(self.train_idx)
         else:
-            if self.gt:
-                assert len(self.test_idx)==self.depth.shape[0]
             return len(self.test_idx)
 

@@ -147,7 +147,8 @@ def main():
     print("=> fetching scenes in '{}'".format(args.data))
     train_set = NewCloudSequenceFolder(
         args.data,
-        transform=train_transform,
+        train_transform=train_transform,
+        test_transform=valid_transform,
         train=True,
         sequence_length=args.sequence_length,
         slices=args.slices,
