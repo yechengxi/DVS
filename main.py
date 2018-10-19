@@ -276,7 +276,7 @@ def main():
             print('Current learning rate:', args.current_scheduler.get_lr()[0])
 
         #errors, error_names = validate_without_gt(args, val_loader, disp_net, pose_exp_net, epoch, output_writers)
-        errors, error_names = validate_with_gt(args, val_loader, disp_net,pose_exp_net, epoch, output_writers)
+        #errors, error_names = validate_with_gt(args, val_loader, disp_net,pose_exp_net, epoch, output_writers)
 
         # train for one epoch
         train_set.train = True
