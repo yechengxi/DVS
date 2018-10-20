@@ -1,8 +1,8 @@
+
+import sys
+"""
 from blessings import Terminal
 import progressbar
-import sys
-
-
 class TermLogger(object):
     def __init__(self, n_epochs, train_size, valid_size):
         self.n_epochs = n_epochs
@@ -33,7 +33,7 @@ class TermLogger(object):
 
     def reset_valid_bar(self):
         self.valid_bar = progressbar.ProgressBar(max_value=self.valid_size, fd=self.valid_bar_writer)
-
+"""
 
 class Writer(object):
     """Create an object with a write method that writes to a
