@@ -35,21 +35,64 @@ def read_calib(fname):
                   [0.0, 0.0, 1.0]])
     D = np.array([0.0, 0.0, 0.0, 0.0])
 
-    lines = []
-    with open(fname) as calib:
-        lines = calib.readlines()
-
-    K_txt = lines[0:3]
-    D_txt = lines[4]
-    
-    for i, line in enumerate(K_txt):
-        for j, num_txt in enumerate(line.split(' ')[0:3]):
-            K[i][j] = float(num_txt)
-
-    for j, num_txt in enumerate(D_txt.split(' ')[0:4]):
-        D[j] = float(num_txt)
+    cam_file = open(fname)
+    cam_data = yaml.safe_load(cam_file)
+    K[0][0] = cam_data['cam_fx']
+    K[1][1] = cam_data['cam_fy']
+    K[0][2] = cam_data['cam_cx']
+    K[1][2] = cam_data['cam_cy']
+    cam_file.close()
 
     return K, D
+
+
+def get_cloud(fname, index_w=0.01):
+    cloud = np.loadtxt(fname, dtype=np.float32)
+    idx = [0]
+    if (cloud.shape[0] < 1):
+        return cloud, idx
+
+    last_ts = cloud[0][0]
+    for i, e in enumerate(cloud):
+        while (e[0] - last_ts > index_w):
+            idx.append(i)
+            last_ts += index_w
+    return cloud, idx
+
+
+def get_slice(cloud, idx, ts, width, mode=1, idx_step=0.01):
+    ts_lo = ts
+    ts_hi = ts + width
+    if (mode == 1):
+        ts_lo = ts - width / 2.0
+        ts_hi = ts + width / 2.0
+    if (mode == 2):
+        ts_lo = ts - width
+        ts_hi = ts
+    if (mode > 2 or mode < 0):
+        print ("Wrong mode! Reverting to default...")
+    if (ts_lo < 0): ts_lo = 0
+
+    t0 = cloud[0][0]
+
+    idx_lo = int((ts_lo - t0) / idx_step)
+    idx_hi = int((ts_hi - t0) / idx_step)
+    if (idx_lo >= len(idx)): idx_lo = -1
+    if (idx_hi >= len(idx)): idx_hi = -1
+
+    sl = np.copy(cloud[idx[idx_lo]:idx[idx_hi]].astype(np.float32))
+    idx_ = np.copy(idx[idx_lo:idx_hi])
+
+    if (idx_lo == idx_hi):
+        return sl, np.array([0])
+
+    idx_0 = idx_[0]
+    idx_ -= idx_0
+
+    t0 = sl[0][0]
+    sl[:,0] -= t0
+
+    return sl, idx_
 
 
 def undistort_img(img, K, D):
@@ -72,9 +115,10 @@ def dvs_img(cloud, shape, K, D):
     return cmb
 
 
-def get_mask_paths(folder_path, every_nth):
+def get_mask_paths(folder_path, every_nth, dt):
     file_list = os.listdir(folder_path)
     ret = {}
+    i = 0
     for f in file_list:
         if '.png' not in f:
             continue
@@ -82,15 +126,36 @@ def get_mask_paths(folder_path, every_nth):
         if (comp[0] != 'mask'):
             continue
         id_ int(comp[1])
-        num = int (comp[2].split('.')[0])
+        num = int(comp[2].split('.')[0])
     
         if (num % every_nth != 0):
             continue
 
         if (id_ not in ret.keys())
-            ret[id_] = []
+            ret[id_] = {}
 
-        ret[id_].append(os.path.join(folder_path, f))
+        time = float(num) * float(dt)
+        ret[id_][i] = [os.path.join(folder_path, f), time]
+        i += 1
+    return ret
+
+
+def get_exr_paths(folder_path, every_nth, dt):
+    file_list = os.listdir(folder_path)
+    ret = {}
+    i = 0
+    for f in file_list:
+        if '.exr' not in f:
+            continue
+        comp = f.split('.')
+        num = int(comp[0])
+
+        if (num % every_nth != 0):
+            continue
+
+        time = float(num) * float(dt)
+        ret[i] = [os.path.join(folder_path, f), time]
+        i += 1
     return ret
 
 
@@ -117,19 +182,37 @@ if __name__ == '__main__':
     print ("Opening", args.base_folder)
 	slice_width = args.width
 
-    K, D = read_calib()
+    K, D = read_calib(os.path.join(args.base_folder, 'rendered', 'camera.yaml'))
     cloud, idx = get_cloud(os.path.join(args.base_folder, 'events.txt'))
-    
+
     frame_step = args.fps[0] / args.fps[1]
-    time_step = float(frame_step) / float()
-    mask_paths = get_mask_paths(args.fps[0])
+    time_step = float(frame_step) / float(args.fps[0])
+    mask_paths = get_mask_paths(os.path.join(args.base_folder, 'rendered', 'masks'), frame_step, 1.0 / float(args.fps[0]))
+    exr_paths  = get_exr_paths(os.path.join(args.base_folder, 'rendered', 'exr'), frame_step, 1.0 / float(args.fps[0]))
 
     print ("Using every", frame_step, '\'th frame, step is', time_step, 'seconds')
 
-    sl = cloud[idx[args.bounds[0]]:idx[args.bounds[1]]]
+    nframes = len(exr_paths)
+    oids = mask_paths.keys()
+    for i in range(nframes):
+        time = exr_paths[i][1]
+        exr_img = OpenEXR.InputFile(exr_paths[i][0])
+        print ("Processing time", time, "frame", i, "out of", nframes)
+
+        sl = get_slice(cloud, idx, time, args.width)
+        cmb = dvs_img(sl, global_shape) 
+    
+        masks = []
+        for id_ in sorted(oids):
+            ts = mask_paths[id_][i][1]
+            if (abs(ts - time) > 0.01):
+                print ("Critical Error! gt timestamps do not match; time =", time, "but ts = ", ts, "mask id is", id_)
+            mask = cv2.imread(mask_paths[id_][i][0], 0)
+            masks.append(mask)
+
+        z = extract_depth(exr_img)
+        img = extract_grayscale(exr_img)
 
 
-    slice_width = sl[-1][0] - sl[0][0]
 
-    cmb = dvs_img(sl, global_shape)
     cv2.imwrite(args.img_name, cmb)
