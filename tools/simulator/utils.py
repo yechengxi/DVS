@@ -5,7 +5,62 @@ import cv2
 import OpenEXR
 import Imath
 import numpy as np
+import sys, os, shutil
 from math import fabs, sqrt
+
+
+class bcolors:
+    HEADER = '\033[95m'
+    PLAIN = '\033[37m'
+    OKBLUE = '\033[94m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
+
+
+def offset(str_, p_offset):
+    for i in range(p_offset):
+        str_ = '...' + str_
+    return str_
+
+def hdr(str_, p_offset=0):
+    return offset(bcolors.HEADER + str_ + bcolors.ENDC, p_offset)
+
+def wht(str_, p_offset=0):
+    return offset(bcolors.PLAIN + str_ + bcolors.ENDC, p_offset)
+
+def okb(str_, p_offset=0):
+    return offset(bcolors.OKBLUE + str_ + bcolors.ENDC, p_offset)
+
+def okg(str_, p_offset=0):
+    return offset(bcolors.OKGREEN + str_ + bcolors.ENDC, p_offset)
+
+def wrn(str_, p_offset=0):
+    return offset(bcolors.WARNING + str_ + bcolors.ENDC, p_offset)
+
+def err(str_, p_offset=0):
+    return offset(bcolors.FAIL + str_ + bcolors.ENDC, p_offset)
+
+def bld(str_, p_offset=0):
+    return offset(bcolors.BOLD + str_ + bcolors.ENDC, p_offset)
+
+
+def ensure_dir(f):
+    if not os.path.exists(f):
+        print (okg("Created directory: ") + okb(f))
+        os.makedirs(f)
+
+
+def clear_dir(f):
+    if os.path.exists(f):
+        print (wrn("Removed directory: ") + okb(f))
+        shutil.rmtree(f)
+    os.makedirs(f)
+    print (okg("Created directory: ") + okb(f))
+
 
 # epsilon for testing whether a number is close to zero
 _EPS = np.finfo(float).eps * 4.0
@@ -157,8 +212,6 @@ def lin2srgb(c):
     return c
 
 
-   
-
 def extract_grayscale(img, srgb=False):
   dw = img.header()['dataWindow']
 
@@ -185,6 +238,26 @@ def extract_grayscale(img, srgb=False):
   return grayscale
   
 
+def extract_bgr(img):
+  dw = img.header()['dataWindow']
+
+  size = (dw.max.x - dw.min.x + 1, dw.max.y - dw.min.y + 1)
+  precision = Imath.PixelType(Imath.PixelType.FLOAT)
+  R = img.channel('R', precision)
+  G = img.channel('G', precision)
+  B = img.channel('B', precision)
+  
+  r = np.fromstring(R, dtype = np.float32)
+  g = np.fromstring(G, dtype = np.float32)
+  b = np.fromstring(B, dtype = np.float32)
+  
+  r.shape = (size[1], size[0])
+  g.shape = (size[1], size[0])
+  b.shape = (size[1], size[0])
+  
+  rgb = cv2.merge([b, g, r])
+  return rgb
+  
 
 def extract_depth(img):
   dw = img.header()['dataWindow']

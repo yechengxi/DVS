@@ -1,6 +1,5 @@
 #!/usr/bin/python3
 
-
 import argparse
 import numpy as np
 import cv2
@@ -10,22 +9,10 @@ import pydvs
 from utils import *
 
 global_shape = (200, 346)
-global_scale_pn = 100
-global_scale_pp = 100
+global_scale_pn = 50
+global_scale_pp = 50
 slice_width = 1
 
-
-exr_img = OpenEXR.InputFile('./ev_datasets/data/exr/0002.exr')
-
-print exr_img.header()
-
-z = extract_depth(exr_img)
-img = extract_grayscale(exr_img)
-
-print np.min(z), np.max(z)
-
-cv2.imwrite('/home/alice/Desktop/depth.png', z * 10)
-cv2.imwrite('/home/alice/Desktop/grayscale.png', img * 255)
 
 
 def read_calib(fname):
@@ -115,35 +102,31 @@ def dvs_img(cloud, shape, K, D):
     return cmb
 
 
-def get_mask_paths(folder_path, every_nth, dt):
+def get_mask_paths(folder_path, every_nth):
     file_list = os.listdir(folder_path)
     ret = {}
-    i = 0
     for f in file_list:
         if '.png' not in f:
             continue
         comp = f.split('_')
         if (comp[0] != 'mask'):
             continue
-        id_ int(comp[1])
+        id_ = int(comp[1])
         num = int(comp[2].split('.')[0])
     
         if (num % every_nth != 0):
             continue
 
-        if (id_ not in ret.keys())
+        if (id_ not in ret.keys()):
             ret[id_] = {}
 
-        time = float(num) * float(dt)
-        ret[id_][i] = [os.path.join(folder_path, f), time]
-        i += 1
+        ret[id_][num] = os.path.join(folder_path, f)
     return ret
 
 
-def get_exr_paths(folder_path, every_nth, dt):
+def get_exr_paths(folder_path, every_nth):
     file_list = os.listdir(folder_path)
     ret = {}
-    i = 0
     for f in file_list:
         if '.exr' not in f:
             continue
@@ -153,10 +136,42 @@ def get_exr_paths(folder_path, every_nth, dt):
         if (num % every_nth != 0):
             continue
 
-        time = float(num) * float(dt)
-        ret[i] = [os.path.join(folder_path, f), time]
-        i += 1
+        ret[num] = os.path.join(folder_path, f)
     return ret
+
+
+#def get_camera_path(folder_path):
+    
+
+
+def get_mask_bycolor(masks):
+    colors = [[255,0,0]]
+    ret = np.zeros((masks[0].shape[0], masks[0].shape[1], 3), dtype=np.uint8)
+    
+    ret[masks[0] > 100] = colors[0]
+    
+    return ret
+
+
+def visualize(folder, eimg, depth, rgb, masks, i=0):
+    fname = os.path.join(folder, 'frame_' + str(i).rjust(10, '0') + '.png')
+   
+    mask_vis = get_mask_bycolor(masks)
+    eimg_copy = np.copy(eimg)
+    eimg_copy[:,:,0] = depth
+
+    res = np.hstack((rgb, eimg_copy, mask_vis))
+    cv2.imwrite(fname, res)
+
+
+def get_normalization(img):
+    m = np.min(img)
+    rng = np.max(img) - m
+    return m, rng
+
+
+def normalize(img, m, rng):
+    return (img - m) * (255.0 / float(rng))
 
 
 if __name__ == '__main__':
@@ -180,39 +195,53 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     print ("Opening", args.base_folder)
-	slice_width = args.width
+    slice_width = args.width
 
     K, D = read_calib(os.path.join(args.base_folder, 'rendered', 'camera.yaml'))
     cloud, idx = get_cloud(os.path.join(args.base_folder, 'events.txt'))
 
     frame_step = args.fps[0] / args.fps[1]
     time_step = float(frame_step) / float(args.fps[0])
-    mask_paths = get_mask_paths(os.path.join(args.base_folder, 'rendered', 'masks'), frame_step, 1.0 / float(args.fps[0]))
-    exr_paths  = get_exr_paths(os.path.join(args.base_folder, 'rendered', 'exr'), frame_step, 1.0 / float(args.fps[0]))
+    mask_paths = get_mask_paths(os.path.join(args.base_folder, 'rendered', 'masks'), frame_step)
+    exr_paths  = get_exr_paths(os.path.join(args.base_folder, 'rendered', 'exr'), frame_step)
+    vis_dir = os.path.join(args.base_folder, 'visualization')
+    clear_dir(vis_dir)
 
     print ("Using every", frame_step, '\'th frame, step is', time_step, 'seconds')
 
     nframes = len(exr_paths)
     oids = mask_paths.keys()
-    for i in range(nframes):
-        time = exr_paths[i][1]
-        exr_img = OpenEXR.InputFile(exr_paths[i][0])
+   
+    # First image
+    frame_nums = sorted(exr_paths.keys())
+    exr_img = OpenEXR.InputFile(exr_paths[frame_nums[0]])
+    z = extract_depth(exr_img)
+    m, rng = get_normalization(z)
+    global_shape = z.shape
+
+    dt = 1.0 / float(args.fps[0])
+    for i, num in enumerate(sorted(exr_paths.keys())):
+        time = float(num) * float(dt)
+        exr_img = OpenEXR.InputFile(exr_paths[num])
         print ("Processing time", time, "frame", i, "out of", nframes)
 
-        sl = get_slice(cloud, idx, time, args.width)
-        cmb = dvs_img(sl, global_shape) 
-    
+        sl, idx_ = get_slice(cloud, idx, time, args.width)
+        
+        # DVS image
+        cmb = dvs_img(sl, global_shape, K, D) 
+
+        # Binary masks
         masks = []
         for id_ in sorted(oids):
-            ts = mask_paths[id_][i][1]
-            if (abs(ts - time) > 0.01):
-                print ("Critical Error! gt timestamps do not match; time =", time, "but ts = ", ts, "mask id is", id_)
-            mask = cv2.imread(mask_paths[id_][i][0], 0)
+            mask = cv2.imread(mask_paths[id_][num], 0)
             masks.append(mask)
 
-        z = extract_depth(exr_img)
-        img = extract_grayscale(exr_img)
+        # Depth image
+        z = normalize(extract_depth(exr_img), m, rng)
+        z = undistort_img(z, K, D)
 
+        # RGB image
+        img = extract_bgr(exr_img) * 255
+        img = undistort_img(img, K, D)
 
-
-    cv2.imwrite(args.img_name, cmb)
+        visualize(vis_dir, cmb, z, img, masks, i)
