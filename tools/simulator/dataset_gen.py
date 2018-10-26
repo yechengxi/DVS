@@ -2,6 +2,7 @@
 
 import argparse
 import numpy as np
+import mathutils
 import cv2
 import os, sys, signal, glob, time
 import pydvs
@@ -140,8 +141,57 @@ def get_exr_paths(folder_path, every_nth):
     return ret
 
 
-#def get_camera_path(folder_path):
+def get_camera_motion(folder_path):
+    ret = {}
     
+    f = open(folder_path)
+    for line in f.readlines():
+        split = line.split(' ')
+        num = int(split[0])
+        
+        v = mathutils.Vector()
+        v.x = float(split[1])
+        v.y = float(split[2])
+        v.z = float(split[3])
+
+        q = mathutils.Quaternion()
+        q.w = float(split[4])
+        q.x = float(split[5])
+        q.y = float(split[6])
+        q.z = float(split[7])
+
+        ret[num] = [v, q]
+    f.close()
+    return ret
+
+
+def get_object_motion(folder_path):
+    ret = {}
+    
+    f = open(folder_path)
+    for line in f.readlines():
+        split = line.split(' ')
+        num = int(split[0])
+        id_ = int(split[1])
+        
+        v = mathutils.Vector()
+        v.x = float(split[2])
+        v.y = float(split[3])
+        v.z = float(split[4])
+
+        q = mathutils.Quaternion()
+        q.w = float(split[5])
+        q.x = float(split[6])
+        q.y = float(split[7])
+        q.z = float(split[8])
+
+        if (num not in ret.keys()):
+            ret[num] = {}
+
+        ret[num][id_] = [v, q]
+
+    f.close()
+    return ret
 
 
 def get_mask_bycolor(masks):
@@ -204,6 +254,13 @@ if __name__ == '__main__':
     time_step = float(frame_step) / float(args.fps[0])
     mask_paths = get_mask_paths(os.path.join(args.base_folder, 'rendered', 'masks'), frame_step)
     exr_paths  = get_exr_paths(os.path.join(args.base_folder, 'rendered', 'exr'), frame_step)
+
+    cam_trajectory = get_camera_motion(os.path.join(args.base_folder, 'rendered', 'trajectory.txt'))
+    obj_trajectory = get_object_motion(os.path.join(args.base_folder, 'rendered', 'objects.txt'))
+
+    print (cam_trajectory)
+    print (obj_trajectory)
+
     vis_dir = os.path.join(args.base_folder, 'visualization')
     clear_dir(vis_dir)
 
