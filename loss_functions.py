@@ -8,7 +8,6 @@ import torch.nn.functional as F
 
 import numpy as np
 
-
 class simple_photometric_reconstruction_loss(nn.Module):
     def __init__(self):
         super(simple_photometric_reconstruction_loss, self).__init__()
@@ -39,12 +38,13 @@ class simple_photometric_reconstruction_loss(nn.Module):
                 if explainability_mask is not None:
                     diff = diff * explainability_mask[:,i:i+1].expand_as(diff)
                 if ssim_w>0 and min(ref_img_warped.shape[2:])>11:
-                    ssim_loss = ssim(tgt_img_scaled,ref_img_warped,size_average=False,mask=out_of_bound*explainability_mask[:,i:i+1])
+                    mask=1
+                    if explainability_mask is not None:
+                        mask=explainability_mask[:, i:i + 1]
+                    ssim_loss = ssim(tgt_img_scaled,ref_img_warped,size_average=False,mask=out_of_bound*mask)
                 else:
                     ssim_loss=0.
-                #diff=SimpleJointLoss(ref_img_warped,tgt_img_scaled)*out_of_bound[:,:,1:-1,1:-1]
-                #if explainability_mask is not None:
-                #    diff = diff * explainability_mask[:,i:i+1,1:-1,1:-1].expand_as(diff)
+
                 reconstruction_loss += diff.abs().view(b,-1).mean(1)+ssim_w*ssim_loss
                 ego_flows_scaled.append(ego_flow)
                 refs_warped_scaled.append(ref_img_warped)
@@ -61,14 +61,18 @@ class simple_photometric_reconstruction_loss(nn.Module):
         loss = 0
         ego_flows=[]
         warped_refs=[]
-        #depth=depth[:1];explainability_mask=explainability_mask[:1];pose=pose[:1]
+
+        weight=0
         for d, mask, p in zip(depth, explainability_mask,pose):
             current_loss,refs_warped_scaled,ego_flows_scaled= one_scale(d, mask,p)
-            loss=loss+current_loss
+            _, _, h, w = d.size()
+            weight+=h*w
+            loss=loss+current_loss*h*w
             ego_flows.append(ego_flows_scaled)
             warped_refs.append(refs_warped_scaled)
-        return loss,warped_refs,ego_flows
+        loss=loss/weight
 
+        return loss,warped_refs,ego_flows
 
 
 
@@ -93,14 +97,14 @@ class sharpness_loss(nn.Module):
             ref_imgs_warped, grids, ego_flows_scaled = multi_inverse_warp(ref_imgs_scaled, depth[:, 0], pose, intrinsics_scaled,
                                                               intrinsics_scaled_inv, padding_mode)
             for i in range(len(ref_imgs)):
-                ref_img=ref_imgs[i]
+                ref_img=ref_imgs_scaled[i]
                 ref_img_warped=ref_imgs_warped[i]
                 new_grid=grids[i]
                 in_bound = (new_grid[:,:,:,0]!=2).type_as(ref_img_warped).unsqueeze(1)
                 #print(ref_img.min(),ref_img.mean(),ref_img.max(),ref_img_warped.min(),ref_img_warped.mean(),ref_img_warped.max())
                 scaling = ref_img.view(b, 3, -1).mean(-1) / (1e-5 + ref_img_warped.view(b, 3, -1).mean(-1))
                 #print(scaling.view(1,-1))
-                stacked_im = stacked_im + ref_img_warped * in_bound* scaling.view(b, 3, 1, 1)
+                stacked_im = stacked_im + ref_img_warped #* in_bound* scaling.view(b, 3, 1, 1)
             stacked_im=torch.pow(stacked_im.abs()+1e-4, .5)
             if explainability_mask is not None:
                 stacked_im = stacked_im * explainability_mask[:, 0:1]
@@ -120,12 +124,17 @@ class sharpness_loss(nn.Module):
         loss = 0
         ego_flows=[]
         warped_refs=[]
-        #depth=depth[:1];explainability_mask=explainability_mask[:1];pose=pose[:1]
+        weight=0
+
         for d, mask, p in zip(depth, explainability_mask,pose):
             current_loss,ref_imgs_warped,ego_flows_scaled= one_scale(d, mask,p)
-            loss=loss+current_loss
+            _, _, h, w = d.size()
+            weight += h * w
+            loss = loss + current_loss * h * w
             ego_flows.append(ego_flows_scaled)
             warped_refs.append(ref_imgs_warped)
+
+        loss = loss / weight
         return loss,warped_refs,ego_flows
 
 
@@ -135,10 +144,51 @@ def explainability_loss(mask):
     if type(mask) not in [tuple, list]:
         mask = [mask]
     loss = 0
+    weight=0
     for mask_scaled in mask:
+        N,C,H,W=mask_scaled.shape
+        weight += H * W
         ones_var = mask_scaled.new_ones(1).expand_as(mask_scaled)
-        loss += nn.functional.binary_cross_entropy(mask_scaled, ones_var)
-    return loss
+        loss += nn.functional.binary_cross_entropy(mask_scaled, ones_var)*H*W
+    return loss/weight
+
+
+
+
+class joint_smooth_loss(nn.Module):
+    def __init__(self):
+        super(joint_smooth_loss, self).__init__()
+
+    def forward(self, pred_map,joint,p=1,eps=5e-2):
+        def gradient(pred):
+            D_dy = pred[:, :, 1:] - pred[:, :, :-1]
+            D_dx = pred[:, :, :, 1:] - pred[:, :, :, :-1]
+            return D_dx, D_dy
+
+        if type(pred_map) not in [tuple, list]:
+            pred_map = [pred_map]
+
+        loss = 0
+        weight = 1.
+
+        joint=joint[:,:1].abs()+joint[:,2:].abs()
+        for scaled_map in pred_map:
+            N = scaled_map.shape[0]
+            dx, dy = gradient(scaled_map)
+            dx2, dxdy = gradient(dx)
+            dydx, dy2 = gradient(dy)
+            dx2=dx2[:,:,1:-1,:]
+            dxdy=dxdy[:,:,:-1,:-1]
+            dydx = dydx[:, :, :-1, :-1]
+            dy2 = dy2[:, :, :, 1:-1]
+            _,_,H,W=dx2.shape
+
+            scaled_joint_img = F.adaptive_avg_pool2d(joint, (H, W))
+
+            loss += (torch.pow(torch.clamp(scaled_joint_img.abs(), min=eps),p-2) *(dx2.abs()+dy2.abs()+dxdy.abs()+dydx.abs())**2).view(N, -1).mean(1)
+            weight /= 2.3 # don't ask me why it works better
+
+        return loss
 
 
 class smooth_loss(nn.Module):
@@ -155,10 +205,10 @@ class smooth_loss(nn.Module):
             pred_map = [pred_map]
 
         loss = 0
-        weight = 1.
+        weight =0
 
         for scaled_map in pred_map:
-            N = scaled_map.shape[0]
+            N,C,H,W = scaled_map.shape
             dx, dy = gradient(scaled_map)
             dx2, dxdy = gradient(dx)
             dydx, dy2 = gradient(dy)
@@ -166,11 +216,11 @@ class smooth_loss(nn.Module):
             loss += (torch.pow(torch.clamp(dx2.abs(), min=eps),p).view(N, -1).mean(1)
                      + torch.pow(torch.clamp(dxdy.abs(), min=eps),p).view(N, -1).mean(1)
                         + torch.pow(torch.clamp(dydx.abs(), min=eps),p).view(N, -1).mean(1)
-                           + torch.pow(torch.clamp(dy2.abs(), min=eps),p).view(N, -1).mean(1)) * weight
+                           + torch.pow(torch.clamp(dy2.abs(), min=eps),p).view(N, -1).mean(1)) * H*W
 
-            weight /= 2.3 # don't ask me why it works better
+            weight += H*W
 
-        return loss
+        return loss/weight
 
 
 

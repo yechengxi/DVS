@@ -20,7 +20,8 @@ from utils import *
 
 from inverse_warp import *
 
-from loss_functions import sharpness_loss,simple_photometric_reconstruction_loss, explainability_loss, smooth_loss,non_local_smooth_loss, compute_errors,pose_smooth_loss,ssim,msssim
+from loss_functions import *
+
 from logger import AverageMeter
 from itertools import chain
 from tensorboardX import SummaryWriter
@@ -131,17 +132,17 @@ def main():
             output_writers.append(SummaryWriter(args.save_path/'valid'/str(i)))
 
     # Data loading code
-    #normalize = custom_transforms.Normalize(mean=[0., 0., 0.],std=[1.,1.,1.])
+    normalize = custom_transforms.Normalize(mean=[0., 0., 0.],std=[.3,1.,.3])
 
     train_transform = custom_transforms.Compose([
         custom_transforms.RandomHorizontalFlip(),
         custom_transforms.RandomScaleCrop(),
         custom_transforms.ArrayToTensor(),
-        #normalize
+        normalize
     ])
 
     valid_transform = custom_transforms.Compose([custom_transforms.ArrayToTensor(),
-                                                #normalize
+                                                normalize
                                                 ])
 
     print("=> fetching scenes in '{}'".format(args.data))
@@ -228,6 +229,9 @@ def main():
 
     args.smooth_loss=smooth_loss().cuda()
     args.smooth_loss = torch.nn.DataParallel(args.smooth_loss)
+
+    args.joint_smooth_loss=joint_smooth_loss().cuda()
+    args.joint_smooth_loss = torch.nn.DataParallel(args.joint_smooth_loss)
 
     args.non_local_smooth_loss=non_local_smooth_loss().cuda()
     args.non_local_smooth_loss = torch.nn.DataParallel(args.non_local_smooth_loss)
@@ -364,7 +368,7 @@ def train(args, train_loader, disp_net, pose_exp_net, optimizer, epoch_size,  tr
 
         if args.sharp:
             pose=pose[:,0:1]
-            explainability_mask=[m[:,:1] for m in explainability_mask]
+            explainability_mask=[(m[:,:1] if m is not None else m) for m in explainability_mask]
             loss_1,warped_refs,ego_flows = args.sharpness_loss(slices,
                                                     intrinsics_var, intrinsics_inv_var,
                                                     depth, explainability_mask, pose,
@@ -387,6 +391,7 @@ def train(args, train_loader, disp_net, pose_exp_net, optimizer, epoch_size,  tr
                 loss_3 = args.non_local_smooth_loss(depth)
             else:
                 loss_3 = args.smooth_loss(depth)#args.smooth_loss(depth)
+                #loss_3 = args.joint_smooth_loss(depth,tgt_img_var)
 
             loss_3=loss_3.mean()
 

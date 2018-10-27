@@ -149,7 +149,14 @@ class NewCloudSequenceFolder(data.Dataset):
 
         import time
 
-        if False:
+        if True:
+            t_s = time.time()
+            for id in range(self.n_scenes):
+                self.scenes[id]=load_scene_s(scenes[id],self.gt)
+            t_e  = time.time()
+            print('loading time:', t_e-t_s)
+
+        else:
             from multiprocessing import Process,Queue
             t_s=time.time()
             queue = Queue()
@@ -165,12 +172,6 @@ class NewCloudSequenceFolder(data.Dataset):
                 print('join')
             t_e  = time.time()
 
-            print('loading time:', t_e-t_s)
-        else:
-            t_s = time.time()
-            for id in range(self.n_scenes):
-                self.scenes[id]=load_scene_s(scenes[id],self.gt)
-            t_e  = time.time()
             print('loading time:', t_e-t_s)
 
         for id in range(self.n_scenes):
