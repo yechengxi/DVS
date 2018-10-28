@@ -287,7 +287,10 @@ def simple_inverse_warp(img, depth, pose, intrinsics,intrinsics_inv, padding_mod
 def get_multigrid(depth, pose,seq_len,intrinsics,intrinsics_inv):
     b, h, w = depth.size()
 
-    pose=pose.view(-1,1,1,6,1)
+    if len(pose.shape)<=3:
+        pose=pose.view(-1,1,1,6,1)
+    else:
+        pose=pose.permute(0,2,3,1).unsqueeze(4)
 
     i_range = torch.arange(0, h, dtype=depth.dtype, device=depth.device, requires_grad=False).view(1, h, 1).expand(1, h, w)  # [1, H, W]
     j_range = torch.arange(0, w, dtype=depth.dtype, device=depth.device, requires_grad=False).view(1, 1, w).expand(1, h, w)  # [1, H, W]
@@ -332,7 +335,11 @@ def get_multigrid(depth, pose,seq_len,intrinsics,intrinsics_inv):
 
     grids=[]
     flows=[]
-    for i in range(-(seq_len-1)//2,seq_len//2+1):
+
+    lst = list(range(-(seq_len - 1) // 2, seq_len // 2 + 1))
+    if seq_len%2==0:
+        del lst[len(lst) // 2]
+    for i in lst:
         flows.append(flow*(i/(seq_len-1)))
         #print((flow*(i/seq_len)).mean())
 

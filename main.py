@@ -64,10 +64,12 @@ parser.add_argument('--print-freq', default=10, type=int,
                     metavar='N', help='print frequency')
 parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
                     help='evaluate model on validation set')
-parser.add_argument('--pretrained-disp', dest='pretrained_disp', default=None, metavar='PATH',
+parser.add_argument('--pretrained-dispnet', dest='pretrained_dispnet', default=None, metavar='PATH',
                     help='path to pre-trained dispnet model')
-parser.add_argument('--pretrained-exppose', dest='pretrained_exp_pose', default=None, metavar='PATH',
+parser.add_argument('--pretrained-posenet', dest='pretrained_posenet', default=None, metavar='PATH',
                     help='path to pre-trained Exp Pose net model')
+parser.add_argument('--pretrained-pixelnet', dest='pretrained_pixelnet', default=None, metavar='PATH',
+                    help='path to pre-trained Pixel net model')
 
 parser.add_argument('--seed', default=1, type=int, help='seed for random functions, and network initialization')
 parser.add_argument('--log-summary', default='progress_log_summary.csv', metavar='PATH',
@@ -130,6 +132,7 @@ def main():
     if args.log_output:
         for i in range(3):
             output_writers.append(SummaryWriter(args.save_path/'valid'/str(i)))
+
 
     # Data loading code
     normalize = custom_transforms.Normalize(mean=[0., 0., 0.],std=[.3,1.,.3])
@@ -200,25 +203,39 @@ def main():
                                    nb_ref_imgs=args.sequence_length - 1,init_planes=args.n_channel//2,scale_factor=args.scale_factor,growth_rate=args.growth_rate//2,final_map_size=args.final_map_size,
                                       output_exp=output_exp,norm_type=args.norm_type).cuda()
 
-    if args.pretrained_exp_pose:
+
+    pixel_net = models.ECN_PixelPose(input_size=200*args.scale,
+                                     nb_ref_imgs=args.sequence_length - 1,init_planes=args.n_channel//2,scale_factor=args.scale_factor,growth_rate=args.growth_rate//2,final_map_size=args.final_map_size,
+                                      output_exp=output_exp,
+                                      norm_type=args.norm_type).cuda()
+
+    if args.pretrained_posenet:
         print("=> using pre-trained weights for explainabilty and pose net")
-        weights = torch.load(args.pretrained_exp_pose)
+        weights = torch.load(args.pretrained_posenet)
         pose_exp_net.load_state_dict(weights['state_dict'], strict=False)
     else:
         pose_exp_net.init_weights()
 
 
-    if args.pretrained_disp:
+    if args.pretrained_dispnet:
         print("=> using pre-trained weights for Dispnet")
-        weights = torch.load(args.pretrained_disp)
+        weights = torch.load(args.pretrained_dispnet)
         disp_net.load_state_dict(weights['state_dict'])
     else:
         disp_net.init_weights()
+
+    if args.pretrained_pixelnet:
+        print("=> using pre-trained weights for pixel net")
+        weights = torch.load(args.pretrained_posenet)
+        pixel_net.load_state_dict(weights['state_dict'], strict=False)
+    else:
+        pixel_net.init_weights()
 
     cudnn.benchmark = True
 
     disp_net = torch.nn.DataParallel(disp_net)
     pose_exp_net = torch.nn.DataParallel(pose_exp_net)
+    pixel_net = torch.nn.DataParallel(pixel_net)
 
 
     args.sharpness_loss=sharpness_loss().cuda()
@@ -226,6 +243,9 @@ def main():
 
     args.simple_photometric_reconstruction_loss = simple_photometric_reconstruction_loss().cuda()
     args.simple_photometric_reconstruction_loss = torch.nn.DataParallel(args.simple_photometric_reconstruction_loss)
+
+    args.pixelwise_photometric_reconstruction_loss = pixelwise_photometric_reconstruction_loss().cuda()
+    args.pixelwise_photometric_reconstruction_loss = torch.nn.DataParallel(args.pixelwise_photometric_reconstruction_loss)
 
     args.smooth_loss=smooth_loss().cuda()
     args.smooth_loss = torch.nn.DataParallel(args.smooth_loss)
@@ -239,14 +259,23 @@ def main():
 
 
     print('=> setting adam solver')
+    if False:
 
-    parameters = chain(disp_net.parameters(), pose_exp_net.parameters())
-    parameters = filter(lambda p: p.requires_grad, parameters)
-    params = sum([np.prod(p.size()) for p in parameters])
-    print(params,'trainable parameters in the network.')
+        parameters = chain(disp_net.parameters(), pose_exp_net.parameters())
+        parameters = filter(lambda p: p.requires_grad, parameters)
+        params = sum([np.prod(p.size()) for p in parameters])
+        print(params,'trainable parameters in the network.')
 
-    parameters = chain(disp_net.parameters(), pose_exp_net.parameters())
-    parameters = filter(lambda p: p.requires_grad, parameters)
+        parameters = chain(disp_net.parameters(), pose_exp_net.parameters())
+        parameters = filter(lambda p: p.requires_grad, parameters)
+    else:
+        parameters = pixel_net.parameters()
+        parameters = filter(lambda p: p.requires_grad, parameters)
+        params = sum([np.prod(p.size()) for p in parameters])
+        print(params, 'trainable parameters in the network.')
+
+        parameters = pixel_net.parameters()
+        parameters = filter(lambda p: p.requires_grad, parameters)
 
     if args.optimizer == 'SGD':
         optimizer = torch.optim.SGD(parameters, lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
@@ -285,7 +314,7 @@ def main():
 
         # train for one epoch
         train_set.train = True
-        train_loss = train(args, train_loader, disp_net, pose_exp_net, optimizer, args.epoch_size, training_writer)
+        train_loss = train(args, train_loader, disp_net, pose_exp_net,pixel_net, optimizer, args.epoch_size, training_writer)
         # evaluate on validation set
         train_set.train = False
         if args.with_gt:
@@ -312,6 +341,9 @@ def main():
             }, {
                 'epoch': epoch + 1,
                 'state_dict': pose_exp_net.module.state_dict()
+            },{
+                'epoch': epoch + 1,
+                'state_dict': pixel_net.module.state_dict()
             },
             is_best)
 
@@ -321,7 +353,7 @@ def main():
 
 from random import random
 
-def train(args, train_loader, disp_net, pose_exp_net, optimizer, epoch_size,  train_writer):
+def train(args, train_loader, disp_net, pose_exp_net, pixel_net, optimizer, epoch_size,  train_writer):
     global n_iter
     batch_time = AverageMeter()
     data_time = AverageMeter()
@@ -351,33 +383,44 @@ def train(args, train_loader, disp_net, pose_exp_net, optimizer, epoch_size,  tr
 
         intrinsics_var = intrinsics.cuda()
         intrinsics_inv_var = intrinsics_inv.cuda()
-
-        # compute output
-        disparities = disp_net(tgt_img_var)
-        explainability_mask, pose = pose_exp_net(tgt_img_var, ref_imgs_var)
-
         ego_flows=None
 
-        # normalize the depth
-        b = tgt_img.shape[0]
-        mean_disp = disparities[0].view(b, -1).mean(-1).view(b, 1, 1, 1) * 0.1
-        disparities = [disp / mean_disp for disp in disparities]
-        depth = [1 / disp for disp in disparities]
+
+        with torch.no_grad():
+            # compute output
+            disparities = disp_net(tgt_img_var)
+
+            # normalize the depth
+            b = tgt_img.shape[0]
+            mean_disp = disparities[0].view(b, -1).mean(-1).view(b, 1, 1, 1) * 0.1
+            disparities = [disp / mean_disp for disp in disparities]
+            depth = [1 / disp for disp in disparities]
+
+            explainability_mask, pose = pose_exp_net(tgt_img_var, ref_imgs_var)
 
 
+            if args.sharp:
+                pose=pose[:,0:1]
+                warped_refs, grids, ego_flows = multi_inverse_warp(ref_imgs_var, depth[0][:, 0], pose, intrinsics_var,
+                                                                   intrinsics_inv_var, args.padding_mode)
+            else:
+                loss_1,warped_refs,ego_flows = args.simple_photometric_reconstruction_loss(tgt_img_var, ref_imgs_var,
+                                                                     intrinsics_var, intrinsics_inv_var,
+                                                                     depth, explainability_mask, pose,
+                                                                     args.ssim_weight, args.padding_mode)
+                warped_refs=warped_refs[0]
 
-        if args.sharp:
-            pose=pose[:,0:1]
-            explainability_mask=[(m[:,:1] if m is not None else m) for m in explainability_mask]
-            loss_1,warped_refs,ego_flows = args.sharpness_loss(slices,
-                                                    intrinsics_var, intrinsics_inv_var,
-                                                    depth, explainability_mask, pose,
-                                                    args.padding_mode)
-        else:
-            loss_1,warped_refs,ego_flows = args.simple_photometric_reconstruction_loss(tgt_img_var, ref_imgs_var,
-                                                                 intrinsics_var, intrinsics_inv_var,
-                                                                 depth, explainability_mask, pose,
-                                                                 args.ssim_weight, args.padding_mode)
+
+        explainability_mask,pixel_pose = pixel_net(tgt_img_var, warped_refs)
+        #pose=(pose[:,-1]-pose[:,0]).view(-1,6,1,1)
+        #pixel_pose=[p+pose for p in pixel_pose]
+        loss_1, warped_refs, ego_flows = args.pixelwise_photometric_reconstruction_loss(tgt_img_var, warped_refs,
+                                                                                        intrinsics_var,
+                                                                                        intrinsics_inv_var,
+                                                                                        depth, explainability_mask,
+                                                                                        pixel_pose,
+                                                                                        args.ssim_weight,
+                                                                                        args.padding_mode)
 
         loss_1=loss_1.mean()
 
@@ -693,7 +736,7 @@ def validate_with_gt(args, val_loader, disp_net, pose_exp_net, epoch, output_wri
             output_disp=scaling(output_disp,output_size=depth.unsqueeze(1).shape)
 
             output_depth = 1/output_disp
-            explainability_mask, pose = pose_exp_net(tgt_img_var, ref_imgs_var)
+            #explainability_mask, pose = pose_exp_net(tgt_img_var, ref_imgs_var)
 
 
             if log_outputs and i % log_freq == 0 and i/log_freq < len(output_writers):

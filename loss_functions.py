@@ -138,6 +138,86 @@ class sharpness_loss(nn.Module):
         return loss,warped_refs,ego_flows
 
 
+class pixelwise_photometric_reconstruction_loss(nn.Module):
+    def __init__(self):
+        super(pixelwise_photometric_reconstruction_loss, self).__init__()
+
+    def forward(self, tgt_img, ref_imgs, intrinsics, intrinsics_inv, depth, explainability_mask, pose,ssim_w=0.,padding_mode='zeros'):
+        def one_scale(depth,explainability_mask,pose):
+
+            reconstruction_loss = 0
+            b, _, h, w = depth.size()
+            downscale = tgt_img.size(2)/h
+            ego_flows_scaled=[]
+            refs_warped_scaled = []
+            tgt_img_scaled = nn.functional.adaptive_avg_pool2d(tgt_img, (h, w))
+            ref_imgs_scaled = [nn.functional.adaptive_avg_pool2d(ref_img, (h, w)) for ref_img in ref_imgs]
+
+            intrinsics_scaled = torch.cat((intrinsics[:, 0:2]/downscale, intrinsics[:, 2:]), dim=1)
+            intrinsics_scaled_inv = torch.cat((intrinsics_inv[:, :, 0:2]*downscale, intrinsics_inv[:, :, 2:]), dim=2)
+
+            ref_imgs_warped, grids, ego_flows_scaled = multi_inverse_warp(ref_imgs_scaled, depth[:, 0], pose, intrinsics_scaled,
+                                                              intrinsics_scaled_inv, padding_mode)
+
+            in_bound = 1.
+            for i in range(len(ref_imgs_scaled)):
+                in_bound = in_bound * (ref_imgs_scaled[i].abs() > 0.01).prod(1, keepdim=True).type_as(
+                    ref_imgs_scaled[i])*(ref_imgs_warped[i].abs() > 0.01).prod(1, keepdim=True).type_as(
+                    ref_imgs_scaled[i])
+
+            for i in range(len(ref_imgs_warped)):
+                ref_img=ref_imgs_scaled[i]
+                ref_img_warped=ref_imgs_warped[i]
+                grid=grids[i]
+                ego_flow=ego_flows_scaled[i]
+
+                #in_bound = 1 - (ref_img_warped == 0).prod(1, keepdim=True).type_as(ref_img_warped)
+                ego_flow =  in_bound.permute(0,2,3,1).type_as(ego_flow)*ego_flow
+                ego_flows_scaled[i]=ego_flow
+
+                diff = (tgt_img_scaled - ref_img_warped) * in_bound
+                if explainability_mask is not None:
+                    diff = diff * explainability_mask[:,i:i+1].expand_as(diff)
+                if ssim_w>0 and min(ref_img_warped.shape[2:])>11:
+                    mask=1
+                    if explainability_mask is not None:
+                        mask = explainability_mask[:,i:i+1]
+                    ssim_loss = ssim(tgt_img_scaled,ref_img_warped,size_average=False,mask=in_bound*mask)
+                else:
+                    ssim_loss=0.
+
+                reconstruction_loss += diff.abs().view(b,-1).mean(1)+ssim_w*ssim_loss
+
+            return reconstruction_loss,ref_imgs_warped,ego_flows_scaled
+
+        if type(explainability_mask) not in [tuple, list]:
+            explainability_mask = [explainability_mask]
+        if type(depth) not in [list, tuple]:
+            depth = [depth]
+        if type(pose) in [tuple, list]:
+            assert len(pose)==len(depth)
+        else:
+            pose=[pose for i in range(len(depth))]
+        loss = 0
+        ego_flows=[]
+        warped_refs=[]
+
+        weight=0
+        for d, mask, p in zip(depth, explainability_mask,pose):
+            current_loss,refs_warped_scaled,ego_flows_scaled= one_scale(d, mask,p)
+            _, _, h, w = d.size()
+            weight+=h*w
+            loss=loss+current_loss*h*w
+            ego_flows.append(ego_flows_scaled)
+            warped_refs.append(refs_warped_scaled)
+        loss=loss/weight
+
+        return loss,warped_refs,ego_flows
+
+
+
+
+
 
 
 def explainability_loss(mask):
