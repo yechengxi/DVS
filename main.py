@@ -401,7 +401,7 @@ def train(args, train_loader, disp_net, pose_exp_net, pixel_net, optimizer, epoc
 
             if args.sharp:
                 pose=pose[:,0:1]
-                warped_refs, grids, ego_flows = multi_inverse_warp(ref_imgs_var, depth[0][:, 0], pose, intrinsics_var,
+                warped_refs, grids, ego_flows = multi_inverse_warp(slices, depth[0][:, 0], pose, intrinsics_var,
                                                                    intrinsics_inv_var, args.padding_mode)
             else:
                 loss_1,warped_refs,ego_flows = args.simple_photometric_reconstruction_loss(tgt_img_var, ref_imgs_var,
@@ -410,17 +410,24 @@ def train(args, train_loader, disp_net, pose_exp_net, pixel_net, optimizer, epoc
                                                                      args.ssim_weight, args.padding_mode)
                 warped_refs=warped_refs[0]
 
+            n_slice=len(warped_refs)
+            T = int(n_slice / args.sequence_length)
+            seqs = []
+            for k in range(args.sequence_length):
+                mini_slices = warped_refs[k *T:(k + 1) * T]
+                stacked_im=0.
+                for l in range(len(mini_slices)):
+                    stacked_im=stacked_im+mini_slices[l]
+                stacked_im[:,1]=0.
+                seqs.append(stacked_im)
+            tgt_img_var=seqs.pop((args.sequence_length-1)//2)
+            ref_imgs_var=seqs
 
-        explainability_mask,pixel_pose = pixel_net(tgt_img_var, warped_refs)
-        #pose=(pose[:,-1]-pose[:,0]).view(-1,6,1,1)
-        #pixel_pose=[p+pose for p in pixel_pose]
-        loss_1, warped_refs, ego_flows = args.pixelwise_photometric_reconstruction_loss(tgt_img_var, warped_refs,
-                                                                                        intrinsics_var,
-                                                                                        intrinsics_inv_var,
-                                                                                        depth, explainability_mask,
-                                                                                        pixel_pose,
-                                                                                        args.ssim_weight,
-                                                                                        args.padding_mode)
+        explainability_mask,pixel_pose = pixel_net(tgt_img_var, ref_imgs_var)
+        loss_1, warped_refs, ego_flows = args.sharpness_loss(slices,
+                                                             intrinsics_var, intrinsics_inv_var,
+                                                             depth, explainability_mask, pixel_pose,
+                                                             args.padding_mode)
 
         loss_1=loss_1.mean()
 
@@ -472,8 +479,15 @@ def train(args, train_loader, disp_net, pose_exp_net, pixel_net, optimizer, epoc
 
         if args.training_output_freq > 0 and n_iter % args.training_output_freq == 0:
 
-            if tgt_img.shape[1]==3:
-                train_writer.add_image('train Input', tensor2array(tgt_img[0],max_value=1,colormap='bone'), n_iter)
+            train_writer.add_image('train Input', tensor2array(tgt_img[0],max_value=1,colormap='bone'), n_iter)
+
+            for r in range(len(seqs)):
+                tmp = ref_imgs_var[r][0].data.cpu()
+                train_writer.add_image('Trained Warped Inputs {}'.format(r),
+                                       tensor2array(tmp, max_value=None, colormap='bone'), n_iter)
+                tmp = tgt_img_var[0].data.cpu()
+                train_writer.add_image('Trained Warped tgt',
+                                       tensor2array(tmp, max_value=None, colormap='bone'), n_iter)
 
             for k,scaled_depth in enumerate(depth):
                 train_writer.add_image('train Dispnet Output Normalized {}'.format(k),tensor2array(disparities[k].data[0].cpu(), max_value=None, colormap='bone'),n_iter)

@@ -7,6 +7,7 @@ Latest:
 CUDA_VISIBLE_DEVICES=0 python main.py  /home/cxy/Data/DVS/cloud -m.5 --batch-size 8 -f 50 --lr 1e-3  -s0.05  --sequence-length 5  --log-output --norm-type gn --slices 25 --sharp --with-gt  
 
 CUDA_VISIBLE_DEVICES=0,1,2,3 python main.py  /vulcan/scratch/cxy/Data/DVS/cloud/ -m1 --batch-size 32 -f 50 --lr 1e-3  -s0.1 --norm-type fd --sequence-length 5 --slices 25 --sharp --log-output --with-gt  >seq5.sl25.m1.s.1.fd.log&  
+CUDA_VISIBLE_DEVICES=0,1,2,3 python main.py  /vulcan/scratch/cxy/Data/DVS/cloud/ -m1 --batch-size 32 -f 50 --lr 1e-3  -s0.05 --norm-type fd --sequence-length 5 --slices 25 --sharp --log-output --with-gt  >seq5.sl25.m1.s.05.fd.log&  
 
 CUDA_VISIBLE_DEVICES=0 python main.py  --pretrained-dispnet pretrained/sharp/dispnet_model_best.pth.tar --pretrained-posenet pretrained/sharp/exp_pose_model_best.pth.tar /home/cxy/Data/DVS/cloud -m1 --batch-size 8 -f 50 --lr 1e-3  -s0.1 --norm-type fd --sequence-length 5 --slices 25 --sharp --log-output --with-gt
 
