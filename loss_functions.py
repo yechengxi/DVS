@@ -174,6 +174,7 @@ class joint_smooth_loss(nn.Module):
         mask=((joint[:,:1].abs()+joint[:,2:].abs())>0).type_as(joint)
         for scaled_map in pred_map:
             dx, dy = gradient(scaled_map)
+            """
             dx=dx[:,:,1:-1,:-1]
             dy=dy[:,:,:-1,1:-1]
             N, _, H, W = dx.shape
@@ -186,11 +187,12 @@ class joint_smooth_loss(nn.Module):
             dydx = dydx[:, :, :-1, :-1]
             dy2 = dy2[:, :, :, 1:-1]
             N,_,H,W=dx2.shape
-            """
 
             scaled_mask = (F.adaptive_avg_pool2d(mask, (H, W))>0.01).type_as(joint)
 
-            loss += ((dx.abs()+dy.abs())*(1-scaled_mask)).view(N, -1).mean(1)*H*W
+            #loss += ((dx.abs()+dy.abs())*(1-scaled_mask)).view(N, -1).mean(1)*H*W
+            loss += ((dx2.abs() + dy2.abs()+dxdy.abs() + dydx.abs()) * (1 - scaled_mask)).view(N, -1).mean(1) * H * W
+
             weight += H * W
 
         return loss/weight
