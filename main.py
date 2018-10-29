@@ -64,9 +64,9 @@ parser.add_argument('--print-freq', default=10, type=int,
                     metavar='N', help='print frequency')
 parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
                     help='evaluate model on validation set')
-parser.add_argument('--pretrained-disp', dest='pretrained_disp', default=None, metavar='PATH',
+parser.add_argument('--pretrained-dispnet', dest='pretrained_dispnet', default=None, metavar='PATH',
                     help='path to pre-trained dispnet model')
-parser.add_argument('--pretrained-exppose', dest='pretrained_exp_pose', default=None, metavar='PATH',
+parser.add_argument('--pretrained-posenet', dest='pretrained_posenet', default=None, metavar='PATH',
                     help='path to pre-trained Exp Pose net model')
 
 parser.add_argument('--seed', default=1, type=int, help='seed for random functions, and network initialization')
@@ -200,17 +200,17 @@ def main():
                                    nb_ref_imgs=args.sequence_length - 1,init_planes=args.n_channel//2,scale_factor=args.scale_factor,growth_rate=args.growth_rate//2,final_map_size=args.final_map_size,
                                       output_exp=output_exp,norm_type=args.norm_type).cuda()
 
-    if args.pretrained_exp_pose:
+    if args.pretrained_posenet:
         print("=> using pre-trained weights for explainabilty and pose net")
-        weights = torch.load(args.pretrained_exp_pose)
+        weights = torch.load(args.pretrained_posenet)
         pose_exp_net.load_state_dict(weights['state_dict'], strict=False)
     else:
         pose_exp_net.init_weights()
 
 
-    if args.pretrained_disp:
+    if args.pretrained_dispnet:
         print("=> using pre-trained weights for Dispnet")
-        weights = torch.load(args.pretrained_disp)
+        weights = torch.load(args.pretrained_dispnet)
         disp_net.load_state_dict(weights['state_dict'])
     else:
         disp_net.init_weights()
