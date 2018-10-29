@@ -390,8 +390,8 @@ def train(args, train_loader, disp_net, pose_exp_net, optimizer, epoch_size,  tr
             if args.nls:
                 loss_3 = args.non_local_smooth_loss(depth)
             else:
-                loss_3 = args.smooth_loss(depth)#args.smooth_loss(depth)
-                #loss_3 = args.joint_smooth_loss(depth,tgt_img_var)
+                #loss_3 = args.smooth_loss(depth)#args.smooth_loss(depth)
+                loss_3 = args.joint_smooth_loss(depth,tgt_img_var)
 
             loss_3=loss_3.mean()
 
