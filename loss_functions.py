@@ -191,8 +191,8 @@ class joint_smooth_loss(nn.Module):
             scaled_mask = (F.adaptive_avg_pool2d(mask, (H, W))>0.01).type_as(joint)
 
             #loss += ((dx.abs()+dy.abs())*(1-scaled_mask)).view(N, -1).mean(1)*H*W
-            loss += ((dx2.abs() + dy2.abs()+dxdy.abs() + dydx.abs()) * (1 - scaled_mask)).view(N, -1).mean(1) * H * W
-
+            loss = loss+ 10*((dx2.abs() + dy2.abs()+dxdy.abs() + dydx.abs()) * (1 - scaled_mask)).view(N, -1).mean(1) * H * W
+            loss = loss + 1*(dx2.abs() + dy2.abs()+dxdy.abs() + dydx.abs()).view(N, -1).mean(1) * H * W
             weight += H * W
 
         return loss/weight
