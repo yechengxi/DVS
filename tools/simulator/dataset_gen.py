@@ -2,7 +2,7 @@
 
 import argparse
 import numpy as np
-import mathutils
+import pyquaternion as qt
 import cv2
 import os, sys, signal, glob, time
 import pydvs
@@ -149,17 +149,14 @@ def get_camera_motion(folder_path):
         split = line.split(' ')
         num = int(split[0])
         
-        v = mathutils.Vector()
-        v.x = float(split[1])
-        v.y = float(split[2])
-        v.z = float(split[3])
+        v = np.array([float(split[1]),
+                      float(split[2]),
+                      float(split[3])])
 
-        q = mathutils.Quaternion()
-        q.w = float(split[4])
-        q.x = float(split[5])
-        q.y = float(split[6])
-        q.z = float(split[7])
-
+        q = qt.Quaternion(float(split[4]),
+                          float(split[5]),
+                          float(split[6]),
+                          float(split[7]))
         ret[num] = [v, q]
     f.close()
     return ret
@@ -167,23 +164,21 @@ def get_camera_motion(folder_path):
 
 def get_object_motion(folder_path):
     ret = {}
-    
+
     f = open(folder_path)
     for line in f.readlines():
         split = line.split(' ')
         num = int(split[0])
         id_ = int(split[1])
-        
-        v = mathutils.Vector()
-        v.x = float(split[2])
-        v.y = float(split[3])
-        v.z = float(split[4])
 
-        q = mathutils.Quaternion()
-        q.w = float(split[5])
-        q.x = float(split[6])
-        q.y = float(split[7])
-        q.z = float(split[8])
+        v = np.array([float(split[2]),
+                      float(split[3]),
+                      float(split[4])])
+
+        q = qt.Quaternion(float(split[5]),
+                          float(split[6]),
+                          float(split[7]),
+                          float(split[8]))
 
         if (num not in ret.keys()):
             ret[num] = {}
@@ -194,19 +189,66 @@ def get_object_motion(folder_path):
     return ret
 
 
+def transform_pose(cam, obj):
+    pos = obj[0] - cam[0]
+    inv_rot = cam[1].inverse
+    rotated_pos = inv_rot.rotate(pos)
+    return [rotated_pos, obj[1]]
+
+
+def get_rel_tf(p1, p2):
+    vel = p2[0] - p1[0]
+    rot = p2[1] / p1[1]
+    return [vel, rot]
+
+
+def get_object_poses(cam_trajectory, obj_trajectory):
+    ret = {}
+    nums = sorted(cam_trajectory.keys())
+    oids = sorted(obj_trajectory[nums[0]].keys())
+
+    for num in nums:
+        ret[num] = {}
+
+    for id_ in oids:
+        last_loc = transform_pose(cam_trajectory[nums[0]],
+                                  obj_trajectory[nums[0]][id_]) 
+        for num in nums:
+            curr_loc = transform_pose(cam_trajectory[num],
+                                      obj_trajectory[num][id_]) 
+            ret[num][id_] = get_rel_tf(last_loc, curr_loc)
+    return ret
+
+
+def get_posemap(masks, objs):
+    mshape = masks[0][0].shape
+
+    cmb = np.zeros((mshape[0], mshape[1], 3), dtype=np.float32)
+    for mask, id_ in masks:
+        obj = objs[id_]
+        cmb[mask > 100] = obj[0]
+        print (okb(str(id_) + ' ' + str(obj)))
+
+    return cmb
+
+
 def get_mask_bycolor(masks):
     colors = [[255,0,0]]
-    ret = np.zeros((masks[0].shape[0], masks[0].shape[1], 3), dtype=np.uint8)
-    
-    ret[masks[0] > 100] = colors[0]
+    ret = np.zeros((masks[0][0].shape[0], masks[0][0].shape[1], 3), dtype=np.uint8)
+
+    ret[masks[0][0] > 100] = colors[0]
     
     return ret
 
 
-def visualize(folder, eimg, depth, rgb, masks, i=0):
+def visualize(folder, eimg, depth, rgb, masks, posemap, i=0):
     fname = os.path.join(folder, 'frame_' + str(i).rjust(10, '0') + '.png')
-   
+
     mask_vis = get_mask_bycolor(masks)
+    mask_vis = (posemap + 5) * 20
+    for m, id_ in masks:
+        mask_vis[m < 100] = 0
+
     eimg_copy = np.copy(eimg)
     eimg_copy[:,:,0] = depth
 
@@ -257,9 +299,8 @@ if __name__ == '__main__':
 
     cam_trajectory = get_camera_motion(os.path.join(args.base_folder, 'rendered', 'trajectory.txt'))
     obj_trajectory = get_object_motion(os.path.join(args.base_folder, 'rendered', 'objects.txt'))
+    obj_poses      = get_object_poses(cam_trajectory, obj_trajectory)
 
-    print (cam_trajectory)
-    print (obj_trajectory)
 
     vis_dir = os.path.join(args.base_folder, 'visualization')
     clear_dir(vis_dir)
@@ -276,12 +317,19 @@ if __name__ == '__main__':
     m, rng = get_normalization(z)
     global_shape = z.shape
 
+
+    depths   = np.zeros((len(exr_paths),) + global_shape, dtype=np.float32)
+    rgbs     = np.zeros((len(exr_paths),) + global_shape + (3,), dtype=np.float32)
+    posemaps = np.zeros((len(exr_paths),) + global_shape + (3,), dtype=np.float32)
+    timestamps = np.zeros((len(exr_paths)), dtype=np.float32)
+
     dt = 1.0 / float(args.fps[0])
     for i, num in enumerate(sorted(exr_paths.keys())):
         time = float(num) * float(dt)
         exr_img = OpenEXR.InputFile(exr_paths[num])
         print ("Processing time", time, "frame", i, "out of", nframes)
 
+        timestamps[i] = time
         sl, idx_ = get_slice(cloud, idx, time, args.width)
         
         # DVS image
@@ -291,7 +339,9 @@ if __name__ == '__main__':
         masks = []
         for id_ in sorted(oids):
             mask = cv2.imread(mask_paths[id_][num], 0)
-            masks.append(mask)
+            masks.append([mask, id_])
+
+        posemap = get_posemap(masks, obj_poses[num])
 
         # Depth image
         z = normalize(extract_depth(exr_img), m, rng)
@@ -301,4 +351,12 @@ if __name__ == '__main__':
         img = extract_bgr(exr_img) * 255
         img = undistort_img(img, K, D)
 
-        visualize(vis_dir, cmb, z, img, masks, i)
+        visualize(vis_dir, cmb, z, img, masks, posemap, i)
+
+        depths[i] = z
+        rgbs[i] = img
+        posemaps[i] = posemap
+
+    np.savez_compressed(args.oname, events=cloud, index=idx, 
+        discretization=0.01, K=K, D=D, depth=depths, rgb=rgbs, posemaps=posemaps, gt_ts=timestamps)
+
