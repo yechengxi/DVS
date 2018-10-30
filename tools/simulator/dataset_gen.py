@@ -192,7 +192,10 @@ def get_object_motion(folder_path):
 def transform_pose(cam, obj):
     pos = obj[0] - cam[0]
     inv_rot = cam[1].inverse
+    inv_rot = cam[1]
     rotated_pos = inv_rot.rotate(pos)
+    
+    print (" -- ", pos, rotated_pos, cam[1])
     return [rotated_pos, obj[1]]
 
 
@@ -217,7 +220,24 @@ def get_object_poses(cam_trajectory, obj_trajectory):
             curr_loc = transform_pose(cam_trajectory[num],
                                       obj_trajectory[num][id_]) 
             ret[num][id_] = get_rel_tf(last_loc, curr_loc)
+            last_loc = curr_loc
     return ret
+
+
+def get_velocity_normalization(vels):
+    min_vel =  10000.0
+    max_vel = -10000.0
+
+    nums = sorted(cam_trajectory.keys())
+    oids = sorted(obj_trajectory[nums[0]].keys())
+    for num in nums:
+        for id_ in oids:
+            vel = vels[num][id_]
+            min_ = np.min(vel[0])
+            max_ = np.max(vel[0])
+            if (min_ < min_vel): min_vel = min_
+            if (max_ > max_vel): max_vel = max_
+    return [min_vel, max_vel - min_vel]
 
 
 def get_posemap(masks, objs):
@@ -241,11 +261,11 @@ def get_mask_bycolor(masks):
     return ret
 
 
-def visualize(folder, eimg, depth, rgb, masks, posemap, i=0):
+def visualize(folder, eimg, depth, rgb, masks, posemap, pm_norm = [0, 100], i=0):
     fname = os.path.join(folder, 'frame_' + str(i).rjust(10, '0') + '.png')
 
     mask_vis = get_mask_bycolor(masks)
-    mask_vis = (posemap + 5) * 20
+    mask_vis = (posemap - pm_norm[0]) / pm_norm[1] * 255.0
     for m, id_ in masks:
         mask_vis[m < 100] = 0
 
@@ -323,6 +343,8 @@ if __name__ == '__main__':
     posemaps = np.zeros((len(exr_paths),) + global_shape + (3,), dtype=np.float32)
     timestamps = np.zeros((len(exr_paths)), dtype=np.float32)
 
+    pm_norm = get_velocity_normalization(obj_poses)
+
     dt = 1.0 / float(args.fps[0])
     for i, num in enumerate(sorted(exr_paths.keys())):
         time = float(num) * float(dt)
@@ -351,7 +373,7 @@ if __name__ == '__main__':
         img = extract_bgr(exr_img) * 255
         img = undistort_img(img, K, D)
 
-        visualize(vis_dir, cmb, z, img, masks, posemap, i)
+        visualize(vis_dir, cmb, z, img, masks, posemap, pm_norm, i)
 
         depths[i] = z
         rgbs[i] = img
