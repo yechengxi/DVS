@@ -29,12 +29,16 @@ def dvs_img(cloud, shape, K, D):
 
     cmb = np.zeros((shape[0], shape[1], 3), dtype=np.float32)
     pydvs.dvs_img(fcloud, cmb)
-   
+ 
+    cmb = undistort_img(cmb, K, D)
+ 
+    cnt_img = cmb[:,:,0] + cmb[:,:,2]
+    cmb[:,:,1] = np.divide(cmb[:,:,1], cnt_img, out=np.zeros_like(cmb[:,:,1]), where=cnt_img > 0.5)
+
     cmb[:,:,0] *= global_scale_pp
-    cmb[:,:,1] *= 255.0 / slice_width
+    cmb[:,:,1] *= 1.0 / slice_width
     cmb[:,:,2] *= global_scale_pn
 
-    #cmb = undistort_img(cmb, K, D)
     return cmb
     return cmb.astype(np.uint8)
 
@@ -45,13 +49,14 @@ def stack(timestamped_images):
     ts0 = timestamped_images[0][1]
 
     for i, (img, ts) in enumerate(timestamped_images):
-        offset = (ts - ts0) * (255.0 / slice_width) 
+        offset = (ts - ts0) * (1.0 / slice_width) 
         cmb[:,:,0] += img[:,:,0]
         cmb[:,:,2] += img[:,:,2]
-        cmb[:,:,1] += (img[:,:,1] + offset) * (img[:,:,0] + img[:,:,2])
+        cmb[:,:,1] += (img[:,:,1] + offset) * (img[:,:,0] / global_scale_pp + img[:,:,2] / global_scale_pn)
 
-    cnt_img = cmb[:,:,0] + cmb[:,:,2]
+    cnt_img = cmb[:,:,0] / global_scale_pp + cmb[:,:,2] / global_scale_pn
     cmb[:,:,1] = np.divide(cmb[:,:,1], cnt_img, out=np.zeros_like(cmb[:,:,1]), where=cnt_img > 0.5)
+
     return cmb
     return cmb.astype(np.uint8)
 
@@ -61,13 +66,16 @@ def stack_approx(images, width=0.01):
     cmb = np.zeros(images[0].shape, dtype=np.float32)
 
     for i, img in enumerate(images):
-        offset = i * width * (255.0 / slice_width)
+        offset = i * width * (1.0 / slice_width)
+        #print (offset, np.min(img[:,:,1]), np.max(img[:,:,1]))
+
         cmb[:,:,0] += img[:,:,0]
         cmb[:,:,2] += img[:,:,2]
-        cmb[:,:,1] += (img[:,:,1] + offset) * (img[:,:,0] + img[:,:,2])
+        cmb[:,:,1] += (img[:,:,1] + offset) * (img[:,:,0] / global_scale_pp + img[:,:,2] / global_scale_pn)
 
-    cnt_img = cmb[:,:,0] + cmb[:,:,2]
+    cnt_img = cmb[:,:,0] / global_scale_pp + cmb[:,:,2] / global_scale_pn
     cmb[:,:,1] = np.divide(cmb[:,:,1], cnt_img, out=np.zeros_like(cmb[:,:,1]), where=cnt_img > 0.5)
+
     return cmb
     return cmb.astype(np.uint8)
 
@@ -115,11 +123,13 @@ if __name__ == '__main__':
     print ("")
 
     slice_width = sl[-1][0] - sl[0][0]
+    slice_width = 0.25
 
-    full = dvs_img(sl, global_shape, K, D) 
+    full = dvs_img(sl, global_shape, K, D)
+    full[:,:,1] *= 255
     cv2.imwrite(args.folder_name + '/full.png', full)
 
-    step = int((args.bounds[1] - args.bounds[0]) / 5)
+    step = 1
     print ("Step = ", step)
 
     slices = []
@@ -136,10 +146,18 @@ if __name__ == '__main__':
 
     # 'Correct' stacking
     stacked = stack(timestamped_slices)
+    stacked[:,:,1] *= 255
+    error = np.abs(stacked - full)
+
+    print("'Correct' error:", np.max(error) / 255 * 100, "%")
     cv2.imwrite(args.folder_name + '/stacked.png', stacked)
-    cv2.imwrite(args.folder_name + '/error.png', np.abs(stacked - full))
+    cv2.imwrite(args.folder_name + '/error.png', error)
 
     # 'Approximated' and a bit simpler stacking
     stacked_approx = stack_approx(slices, 0.01)
+    stacked_approx[:,:,1] *= 255
+    error = np.abs(stacked_approx - full)
+
+    print("Approx error:", np.max(error) / 255 * 100, "%")
     cv2.imwrite(args.folder_name + '/stacked_approx.png', stacked_approx)
-    cv2.imwrite(args.folder_name + '/error_approx.png', np.abs(stacked_approx - full))
+    cv2.imwrite(args.folder_name + '/error_approx.png', error)

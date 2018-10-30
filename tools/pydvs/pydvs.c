@@ -46,11 +46,12 @@ static PyObject* dvs_img(PyObject* self, PyObject* args)
     }
 
     // Normalize time image    
+    /*
     for (unsigned long i = 0; i < dims[0] * dims[1]; ++i) {
         float div = out_dataptr[i * 3 + 0] + out_dataptr[i * 3 + 2];
         if (div > 0.5) // It can actually only be an integer, like 0, 1, 2...
             out_dataptr[i * 3 + 1] /= div;
-    }
+    }*/
 
     //Py_INCREF(out_array);
     return Py_BuildValue("");
