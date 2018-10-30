@@ -440,12 +440,14 @@ def train(args, train_loader, disp_net, pose_exp_net, optimizer, epoch_size,  tr
 
                 # log warped images along with explainability mask
                 stacked_im = 0.
-
+                counter_im=0
                 if args.sharp:
                     middle_slice = warped_refs_scaled[len(warped_refs_scaled)//2][0]
                 else:
                     tgt_img_scaled = nn.functional.adaptive_avg_pool2d(tgt_img_var, (h, w))
                     middle_slice = tgt_img_scaled[0]
+
+
 
                 for j in range(len(warped_refs_scaled)):
 
@@ -457,8 +459,12 @@ def train(args, train_loader, disp_net, pose_exp_net, optimizer, epoch_size,  tr
                                                                     colormap='bone'), n_iter)
 
                         ref_warped = warped_refs_scaled[j][0]
-                        ref_warped[:, 1]=j/args.slices+ref_warped[:,1]*5/args.slices
-                        #print(ref_warped[:,0].max().cpu().data.numpy(),ref_warped[:,1].max().cpu().data.numpy(),ref_warped[:,2].max().cpu().data.numpy())
+                        mask=((ref_warped[1]>0.01).type_as(ref_warped))#mask for the time image
+                        ref_warped[1]=mask*(j+1)/args.slices#+ref_warped[1]*5/args.slices
+                        counter_im+=mask
+                        #ref_warped=ref_warped[1]
+                        #ref_warped[2]=0.
+                        print(ref_warped[:,0].max().cpu().data.numpy(),ref_warped[:,1].max().cpu().data.numpy(),ref_warped[:,2].max().cpu().data.numpy())
                         stacked_im = stacked_im + ref_warped
 
                         if ego_flows is not None:
@@ -473,7 +479,7 @@ def train(args, train_loader, disp_net, pose_exp_net, optimizer, epoch_size,  tr
                                                             max_value=1.), n_iter)
 
 
-                stacked_im[1]=0
+                stacked_im[1]=stacked_im[1]/(counter_im+1e-3)
                 train_writer.add_image('train stacked Outputs {}'.format(k), tensor2array(stacked_im.abs().data.cpu(),colormap='bone',max_value=None), n_iter)
 
         # record loss and EPE
