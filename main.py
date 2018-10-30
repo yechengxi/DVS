@@ -390,8 +390,8 @@ def train(args, train_loader, disp_net, pose_exp_net, optimizer, epoch_size,  tr
             if args.nls:
                 loss_3 = args.non_local_smooth_loss(depth)
             else:
-                #loss_3 = args.smooth_loss(depth)#args.smooth_loss(depth)
-                loss_3 = args.joint_smooth_loss(depth,tgt_img_var)
+                loss_3 = args.smooth_loss(depth)
+                #loss_3 = args.joint_smooth_loss(depth,tgt_img_var)
 
             loss_3=loss_3.mean()
 
@@ -458,6 +458,7 @@ def train(args, train_loader, disp_net, pose_exp_net, optimizer, epoch_size,  tr
 
                         ref_warped = warped_refs_scaled[j][0]
                         ref_warped[:, 1]=j/args.slices+ref_warped[:,1]*5/args.slices
+                        #print(ref_warped[:,0].max().cpu().data.numpy(),ref_warped[:,1].max().cpu().data.numpy(),ref_warped[:,2].max().cpu().data.numpy())
                         stacked_im = stacked_im + ref_warped
 
                         if ego_flows is not None:
