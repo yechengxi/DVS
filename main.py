@@ -135,7 +135,7 @@ def main():
 
 
     # Data loading code
-    normalize = custom_transforms.Normalize(mean=[0., 0., 0.],std=[.3,1.,.3])
+    normalize = custom_transforms.Normalize(mean=[0., 0., 0.],std=[1.,1.,1.])
 
     train_transform = custom_transforms.Compose([
         custom_transforms.RandomHorizontalFlip(),
@@ -369,7 +369,7 @@ def train(args, train_loader, disp_net, pose_exp_net, pixel_net, optimizer, epoc
     start_time = time.time()
     end = time.time()
 
-    for i, (seqs, slices, intrinsics, intrinsics_inv) in enumerate(train_loader):
+    for i, (seqs, slices, intrinsics, intrinsics_inv,depth) in enumerate(train_loader):
 
         # measure data loading time
         data_time.update(time.time() - end)
@@ -383,47 +383,25 @@ def train(args, train_loader, disp_net, pose_exp_net, pixel_net, optimizer, epoc
 
         intrinsics_var = intrinsics.cuda()
         intrinsics_inv_var = intrinsics_inv.cuda()
+
+        depth=depth.cuda().unsqueeze(1)
         ego_flows=None
 
+        explainability_mask,pixel_pose = pixel_net(tgt_img_var, ref_imgs_var)
 
         with torch.no_grad():
             # compute output
-            disparities = disp_net(tgt_img_var)
-
+            disparities=[]
+            disp=1 / (depth/100 + .1)
+            for p in pixel_pose:
+                _,_,H,W=p.shape
+                disparities.append(F.adaptive_avg_pool2d(disp,(H,W)))
             # normalize the depth
             b = tgt_img.shape[0]
             mean_disp = disparities[0].view(b, -1).mean(-1).view(b, 1, 1, 1) * 0.1
             disparities = [disp / mean_disp for disp in disparities]
             depth = [1 / disp for disp in disparities]
 
-            explainability_mask, pose = pose_exp_net(tgt_img_var, ref_imgs_var)
-
-
-            if args.sharp:
-                pose=pose[:,0:1]
-                warped_refs, grids, ego_flows = multi_inverse_warp(slices, depth[0][:, 0], pose, intrinsics_var,
-                                                                   intrinsics_inv_var, args.padding_mode)
-            else:
-                loss_1,warped_refs,ego_flows = args.simple_photometric_reconstruction_loss(tgt_img_var, ref_imgs_var,
-                                                                     intrinsics_var, intrinsics_inv_var,
-                                                                     depth, explainability_mask, pose,
-                                                                     args.ssim_weight, args.padding_mode)
-                warped_refs=warped_refs[0]
-
-            n_slice=len(warped_refs)
-            T = int(n_slice / args.sequence_length)
-            seqs = []
-            for k in range(args.sequence_length):
-                mini_slices = warped_refs[k *T:(k + 1) * T]
-                stacked_im=0.
-                for l in range(len(mini_slices)):
-                    stacked_im=stacked_im+mini_slices[l]
-                stacked_im[:,1]=0.
-                seqs.append(stacked_im)
-            tgt_img_var=seqs.pop((args.sequence_length-1)//2)
-            ref_imgs_var=seqs
-
-        explainability_mask,pixel_pose = pixel_net(tgt_img_var, ref_imgs_var)
         loss_1, warped_refs, ego_flows = args.sharpness_loss(slices,
                                                              intrinsics_var, intrinsics_inv_var,
                                                              depth, explainability_mask, pixel_pose,

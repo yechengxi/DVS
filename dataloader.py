@@ -184,7 +184,7 @@ class NewCloudSequenceFolder(data.Dataset):
             self.test_idx += list(zip([id for i in range(len(tmp[split:]))],tmp[split:]))
 
             if self.gt:#only save the portion we use
-                self.scenes[id]['depth'] = self.scenes[id]['depth'][split:]
+                #self.scenes[id]['depth'] = self.scenes[id]['depth'][split:]
                 self.scenes[id]['depth'][np.isnan(self.scenes[id]['depth'])]=0. #set nan to 0
 
 
@@ -232,8 +232,8 @@ class NewCloudSequenceFolder(data.Dataset):
             intrinsics = np.copy(self.scenes[scene_id]['K'])
 
 
-        if self.gt and (not self.train):
-            index-=self.scenes[scene_id]['n_train']
+        if self.gt: #and (not self.train)
+            #index-=self.scenes[scene_id]['n_train']
             depth=self.scenes[scene_id]['depth'][index]
             return seqs, slices, intrinsics, np.linalg.inv(intrinsics),depth
         else:
