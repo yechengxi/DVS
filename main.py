@@ -457,6 +457,7 @@ def train(args, train_loader, disp_net, pose_exp_net, optimizer, epoch_size,  tr
                                                                     colormap='bone'), n_iter)
 
                         ref_warped = warped_refs_scaled[j][0]
+                        ref_warped[:, 1]=j/args.slices+ref_warped[:,1]*5/args.slices
                         stacked_im = stacked_im + ref_warped
 
                         if ego_flows is not None:
