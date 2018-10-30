@@ -132,7 +132,7 @@ def main():
             output_writers.append(SummaryWriter(args.save_path/'valid'/str(i)))
 
     # Data loading code
-    normalize = custom_transforms.Normalize(mean=[0., 0., 0.],std=[.3,1.,.3])
+    normalize = custom_transforms.Normalize(mean=[0., 0., 0.],std=[1.,1.,1.])
 
     train_transform = custom_transforms.Compose([
         custom_transforms.RandomHorizontalFlip(),
@@ -460,11 +460,11 @@ def train(args, train_loader, disp_net, pose_exp_net, optimizer, epoch_size,  tr
 
                         ref_warped = warped_refs_scaled[j][0]
                         mask=((ref_warped[1]>0.01).type_as(ref_warped))#mask for the time image
-                        ref_warped[1]=mask*(j+1)/args.slices#+ref_warped[1]*5/args.slices
-                        counter_im+=mask
+                        ref_warped[1]=mask*j/args.slices*(ref_warped[0].abs()+ref_warped[2].abs())
+                        counter_im+=mask*(ref_warped[0].abs()+ref_warped[2].abs())
                         #ref_warped=ref_warped[1]
                         #ref_warped[2]=0.
-                        print(ref_warped[:,0].max().cpu().data.numpy(),ref_warped[:,1].max().cpu().data.numpy(),ref_warped[:,2].max().cpu().data.numpy())
+                        #print(ref_warped[:,0].max().cpu().data.numpy(),ref_warped[:,1].max().cpu().data.numpy(),ref_warped[:,2].max().cpu().data.numpy())
                         stacked_im = stacked_im + ref_warped
 
                         if ego_flows is not None:
