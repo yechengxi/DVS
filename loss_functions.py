@@ -169,26 +169,33 @@ class joint_smooth_loss(nn.Module):
             pred_map = [pred_map]
 
         loss = 0
-        weight = 1.
+        weight =0
 
-        joint=joint[:,:1].abs()+joint[:,2:].abs()
+        mask=((joint[:,:1].abs()+joint[:,2:].abs())>0).type_as(joint)
         for scaled_map in pred_map:
-            N = scaled_map.shape[0]
             dx, dy = gradient(scaled_map)
+            """
+            dx=dx[:,:,1:-1,:-1]
+            dy=dy[:,:,:-1,1:-1]
+            N, _, H, W = dx.shape
+
+            """
             dx2, dxdy = gradient(dx)
             dydx, dy2 = gradient(dy)
             dx2=dx2[:,:,1:-1,:]
             dxdy=dxdy[:,:,:-1,:-1]
             dydx = dydx[:, :, :-1, :-1]
             dy2 = dy2[:, :, :, 1:-1]
-            _,_,H,W=dx2.shape
+            N,_,H,W=dx2.shape
 
-            scaled_joint_img = F.adaptive_avg_pool2d(joint, (H, W))
+            scaled_mask = (F.adaptive_avg_pool2d(mask, (H, W))>0.01).type_as(joint)
 
-            loss += (torch.pow(torch.clamp(scaled_joint_img.abs(), min=eps),p-2) *(dx2.abs()+dy2.abs()+dxdy.abs()+dydx.abs())**2).view(N, -1).mean(1)
-            weight /= 2.3 # don't ask me why it works better
+            #loss += ((dx.abs()+dy.abs())*(1-scaled_mask)).view(N, -1).mean(1)*H*W
+            loss = loss+ 10*((dx2.abs() + dy2.abs()+dxdy.abs() + dydx.abs()) * (1 - scaled_mask)).view(N, -1).mean(1) * H * W
+            loss = loss + 1*(dx2.abs() + dy2.abs()+dxdy.abs() + dydx.abs()).view(N, -1).mean(1) * H * W
+            weight += H * W
 
-        return loss
+        return loss/weight
 
 
 class smooth_loss(nn.Module):
