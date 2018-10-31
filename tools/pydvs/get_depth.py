@@ -10,7 +10,7 @@ import matplotlib.colors as colors
 sys.path.insert(0, './build/lib.linux-x86_64-3.5') #The pydvs.so should be in PYTHONPATH!
 import pydvs
 
-global_scale_t = 20 * 255
+
 global_scale_pn = 100
 global_scale_pp = 100
 global_shape = (200, 346)

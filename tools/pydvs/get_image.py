@@ -27,7 +27,6 @@ def dvs_img(cloud, shape):
     cmb[:,:,1] *= 255.0 / slice_width
     cmb[:,:,2] *= global_scale_pn
 
-    c_end = time.time()
     return cmb
 
 
