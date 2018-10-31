@@ -108,7 +108,7 @@ class sharpness_loss(nn.Module):
             stacked_im=torch.pow(stacked_im.abs()+1e-4, .5)
             if explainability_mask is not None:
                 stacked_im = stacked_im * explainability_mask[:, 0:1]
-            stacked_im=stacked_im[:,0]+stacked_im[:,2]#take the event channels
+            #stacked_im=stacked_im[:,0]+stacked_im[:,2]#take the event channels
             sharpness_loss += stacked_im.view(b, -1).mean(1)
 
             return sharpness_loss,ref_imgs_warped,ego_flows_scaled
@@ -159,7 +159,7 @@ class joint_smooth_loss(nn.Module):
     def __init__(self):
         super(joint_smooth_loss, self).__init__()
 
-    def forward(self, pred_map,joint,p=1,eps=5e-2):
+    def forward(self, pred_map,joint,p=.5,eps=1e-3):
         def gradient(pred):
             D_dy = pred[:, :, 1:] - pred[:, :, :-1]
             D_dx = pred[:, :, :, 1:] - pred[:, :, :, :-1]
@@ -171,14 +171,15 @@ class joint_smooth_loss(nn.Module):
         loss = 0
         weight =0
 
-        mask=((joint[:,:1].abs()+joint[:,2:].abs())>0).type_as(joint)
+        mask=((joint[:,:1].abs()+joint[:,2:].abs())>(4./255*50)).type_as(joint)
+        N,_,H,W=mask.shape
+        #print('event portion:', mask.sum().item()/N/H/W)
         for scaled_map in pred_map:
             dx, dy = gradient(scaled_map)
             """
             dx=dx[:,:,1:-1,:-1]
             dy=dy[:,:,:-1,1:-1]
             N, _, H, W = dx.shape
-
             """
             dx2, dxdy = gradient(dx)
             dydx, dy2 = gradient(dy)
@@ -189,10 +190,14 @@ class joint_smooth_loss(nn.Module):
             N,_,H,W=dx2.shape
 
             scaled_mask = (F.adaptive_avg_pool2d(mask, (H, W))>0.01).type_as(joint)
-
             #loss += ((dx.abs()+dy.abs())*(1-scaled_mask)).view(N, -1).mean(1)*H*W
-            loss = loss+ 10*((dx2.abs() + dy2.abs()+dxdy.abs() + dydx.abs()) * (1 - scaled_mask)).view(N, -1).mean(1) * H * W
-            loss = loss + 1*(dx2.abs() + dy2.abs()+dxdy.abs() + dydx.abs()).view(N, -1).mean(1) * H * W
+            tmp=(torch.pow(torch.clamp(dx2.abs(), min=eps),p)
+                     + torch.pow(torch.clamp(dxdy.abs(), min=eps),p)
+                        + torch.pow(torch.clamp(dydx.abs(), min=eps),p)
+                           + torch.pow(torch.clamp(dy2.abs(), min=eps),p))
+
+            loss = loss+ (10*tmp* (1 - scaled_mask)).view(N, -1).mean(1) * H * W
+            loss = loss + 1*tmp.view(N, -1).mean(1) * H * W
             weight += H * W
 
         return loss/weight
