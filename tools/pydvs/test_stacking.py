@@ -32,8 +32,11 @@ def dvs_img(cloud, shape, K, D):
  
     cmb = undistort_img(cmb, K, D)
  
-    cnt_img = cmb[:,:,0] + cmb[:,:,2]
-    cmb[:,:,1] = np.divide(cmb[:,:,1], cnt_img, out=np.zeros_like(cmb[:,:,1]), where=cnt_img > 0.5)
+    cnt_img = cmb[:,:,0] + cmb[:,:,2] + 1e-8
+    timg = cmb[:,:,1]
+    
+    timg[cnt_img < 0.99] = 0
+    timg /= cnt_img
 
     cmb[:,:,0] *= global_scale_pp
     cmb[:,:,1] *= 1.0 / slice_width
@@ -52,10 +55,14 @@ def stack(timestamped_images):
         offset = (ts - ts0) * (1.0 / slice_width) 
         cmb[:,:,0] += img[:,:,0]
         cmb[:,:,2] += img[:,:,2]
-        cmb[:,:,1] += (img[:,:,1] + offset) * (img[:,:,0] / global_scale_pp + img[:,:,2] / global_scale_pn)
+        cmb[:,:,1] += (img[:,:,1] + offset) * (img[:,:,0] + img[:,:,2])
 
-    cnt_img = cmb[:,:,0] / global_scale_pp + cmb[:,:,2] / global_scale_pn
-    cmb[:,:,1] = np.divide(cmb[:,:,1], cnt_img, out=np.zeros_like(cmb[:,:,1]), where=cnt_img > 0.5)
+    cnt_img = cmb[:,:,0] + cmb[:,:,2] + 1e-8
+    #cmb[:,:,1] = np.divide(cmb[:,:,1], cnt_img, out=np.zeros_like(cmb[:,:,1]), where=cnt_img > 0.5)
+    timg = cmb[:,:,1]
+
+    timg[cnt_img < 0.99 * global_scale_pn] = 0
+    timg /= cnt_img
 
     return cmb
     return cmb.astype(np.uint8)
@@ -71,10 +78,13 @@ def stack_approx(images, width=0.01):
 
         cmb[:,:,0] += img[:,:,0]
         cmb[:,:,2] += img[:,:,2]
-        cmb[:,:,1] += (img[:,:,1] + offset) * (img[:,:,0] / global_scale_pp + img[:,:,2] / global_scale_pn)
+        cmb[:,:,1] += (img[:,:,1] + offset) * (img[:,:,0] + img[:,:,2])
 
-    cnt_img = cmb[:,:,0] / global_scale_pp + cmb[:,:,2] / global_scale_pn
-    cmb[:,:,1] = np.divide(cmb[:,:,1], cnt_img, out=np.zeros_like(cmb[:,:,1]), where=cnt_img > 0.5)
+    cnt_img = cmb[:,:,0] + cmb[:,:,2] + 1e-8
+    timg = cmb[:,:,1]
+
+    timg[cnt_img < 0.99 * global_scale_pn] = 0
+    timg /= cnt_img
 
     return cmb
     return cmb.astype(np.uint8)
