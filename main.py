@@ -100,6 +100,8 @@ parser.add_argument('--multistep-gamma', default=0.1, type=float,
 parser.add_argument('--arch', default='ecn', help='architecture')
 parser.add_argument('--norm-type', default='gn', help='normalization type')
 
+parser.add_argument('--mode', default=0, type=int, help='training mode')
+
 
 parser.add_argument('--n-channel', '--init-channel', default=32, type=int,
                     help='initial feature channels(32|64|128).')
@@ -135,17 +137,17 @@ def main():
 
 
     # Data loading code
-    normalize = custom_transforms.Normalize(mean=[0., 0., 0.],std=[1.,1.,1.])
+    #normalize = custom_transforms.Normalize(mean=[0., 0., 0.],std=[1.,1.,1.])
 
     train_transform = custom_transforms.Compose([
-        custom_transforms.RandomHorizontalFlip(),
-        custom_transforms.RandomScaleCrop(),
+        #custom_transforms.RandomHorizontalFlip(),
+        #custom_transforms.RandomScaleCrop(),
         custom_transforms.ArrayToTensor(),
-        normalize
+        #normalize
     ])
 
     valid_transform = custom_transforms.Compose([custom_transforms.ArrayToTensor(),
-                                                normalize
+                                                #normalize
                                                 ])
 
     print("=> fetching scenes in '{}'".format(args.data))
@@ -209,27 +211,28 @@ def main():
                                       output_exp=output_exp,
                                       norm_type=args.norm_type).cuda()
 
-    if args.pretrained_posenet:
-        print("=> using pre-trained weights for explainabilty and pose net")
-        weights = torch.load(args.pretrained_posenet)
-        pose_exp_net.load_state_dict(weights['state_dict'], strict=False)
-    else:
-        pose_exp_net.init_weights()
+    if args.mode==0:
+        if args.pretrained_posenet:
+            print("=> using pre-trained weights for explainabilty and pose net")
+            weights = torch.load(args.pretrained_posenet)
+            pose_exp_net.load_state_dict(weights['state_dict'], strict=False)
+        else:
+            pose_exp_net.init_weights()
 
 
-    if args.pretrained_dispnet:
-        print("=> using pre-trained weights for Dispnet")
-        weights = torch.load(args.pretrained_dispnet)
-        disp_net.load_state_dict(weights['state_dict'])
+        if args.pretrained_dispnet:
+            print("=> using pre-trained weights for Dispnet")
+            weights = torch.load(args.pretrained_dispnet)
+            disp_net.load_state_dict(weights['state_dict'])
+        else:
+            disp_net.init_weights()
     else:
-        disp_net.init_weights()
-
-    if args.pretrained_pixelnet:
-        print("=> using pre-trained weights for pixel net")
-        weights = torch.load(args.pretrained_posenet)
-        pixel_net.load_state_dict(weights['state_dict'], strict=False)
-    else:
-        pixel_net.init_weights()
+        if args.pretrained_pixelnet:
+            print("=> using pre-trained weights for pixel net")
+            weights = torch.load(args.pretrained_posenet)
+            pixel_net.load_state_dict(weights['state_dict'], strict=False)
+        else:
+            pixel_net.init_weights()
 
     cudnn.benchmark = True
 
@@ -259,7 +262,7 @@ def main():
 
 
     print('=> setting adam solver')
-    if False:
+    if args.mode==0:
 
         parameters = chain(disp_net.parameters(), pose_exp_net.parameters())
         parameters = filter(lambda p: p.requires_grad, parameters)
@@ -392,7 +395,7 @@ def train(args, train_loader, disp_net, pose_exp_net, pixel_net, optimizer, epoc
         with torch.no_grad():
             # compute output
             disparities=[]
-            disp=1 / (depth/100 + .1)
+            disp=1 / (depth/100 + .001)
             for p in pixel_pose:
                 _,_,H,W=p.shape
                 disparities.append(F.adaptive_avg_pool2d(disp,(H,W)))

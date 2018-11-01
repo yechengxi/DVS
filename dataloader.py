@@ -185,7 +185,8 @@ class NewCloudSequenceFolder(data.Dataset):
 
             if self.gt:#only save the portion we use
                 #self.scenes[id]['depth'] = self.scenes[id]['depth'][split:]
-                self.scenes[id]['depth'][np.isnan(self.scenes[id]['depth'])]=0. #set nan to 0
+                self.scenes[id]['depth'][np.isnan(self.scenes[id]['depth'])]=1e4 #reset nan
+                self.scenes[id]['depth'][self.scenes[id]['depth']<=1e-2]=1e4 #reset nan
 
 
 
