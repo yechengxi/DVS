@@ -140,8 +140,8 @@ def main():
     #normalize = custom_transforms.Normalize(mean=[0., 0., 0.],std=[1.,1.,1.])
 
     train_transform = custom_transforms.Compose([
-        #custom_transforms.RandomHorizontalFlip(),
-        #custom_transforms.RandomScaleCrop(),
+        custom_transforms.RandomHorizontalFlip(),
+        custom_transforms.RandomScaleCrop(),
         custom_transforms.ArrayToTensor(),
         #normalize
     ])
@@ -390,24 +390,43 @@ def train(args, train_loader, disp_net, pose_exp_net, pixel_net, optimizer, epoc
         depth=depth.cuda().unsqueeze(1)
         ego_flows=None
 
-        explainability_mask,pixel_pose = pixel_net(tgt_img_var, ref_imgs_var)
-
-        with torch.no_grad():
+        if args.mode==0:
             # compute output
-            disparities=[]
-            disp=1 / (depth/100 + .001)
-            for p in pixel_pose:
-                _,_,H,W=p.shape
-                disparities.append(F.adaptive_avg_pool2d(disp,(H,W)))
-            # normalize the depth
+            disparities = disp_net(tgt_img_var)
+
+            #normalize
             b = tgt_img.shape[0]
-            mean_disp = disparities[0].view(b, -1).mean(-1).view(b, 1, 1, 1) * 0.1
-            disparities = [disp / mean_disp for disp in disparities]
-            depth = [1 / disp for disp in disparities]
+            mean_disp=disparities[0].view(b,-1).mean(-1).view(b,1,1,1)*0.1
+
+            disparities=[disp/mean_disp for disp in disparities]
+            depth = [1/disp for disp in disparities]
+            explainability_mask,pose = pose_exp_net(tgt_img_var, ref_imgs_var)
+
+            pose = pose[:, 0:1]
+            explainability_mask = [(m[:, :1] if m is not None else m) for m in explainability_mask]
+
+
+        else:
+            explainability_mask,pixel_pose = pixel_net(tgt_img_var, ref_imgs_var)
+
+            with torch.no_grad():
+                # compute output
+                disparities=[]
+                disp=1 / (depth/100 + .001)
+                for p in pixel_pose:
+                    _,_,H,W=p.shape
+                    disparities.append(F.adaptive_avg_pool2d(disp,(H,W)))
+                # normalize the depth
+                b = tgt_img.shape[0]
+                mean_disp = disparities[0].view(b, -1).mean(-1).view(b, 1, 1, 1) * 0.1
+                disparities = [disp / mean_disp for disp in disparities]
+                depth = [1 / disp for disp in disparities]
+
+            pose=pixel_pose
 
         loss_1, warped_refs, ego_flows = args.sharpness_loss(slices,
                                                              intrinsics_var, intrinsics_inv_var,
-                                                             depth, explainability_mask, pixel_pose,
+                                                             depth, explainability_mask, pose,
                                                              args.padding_mode)
 
         loss_1=loss_1.mean()
