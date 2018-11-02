@@ -77,8 +77,9 @@ def get_slice(cloud, idx, ts, width, mode=1, idx_step=0.01):
     idx_0 = idx_[0]
     idx_ -= idx_0
 
-    t0 = sl[0][0]
-    sl[:,0] -= t0
+    if (sl.shape[0] > 0):
+        t0 = sl[0][0]
+        sl[:,0] -= t0
 
     return sl, idx_
 
@@ -95,12 +96,22 @@ def dvs_img(cloud, shape, K, D):
 
     cmb = np.zeros((shape[0], shape[1], 3), dtype=np.float32)
     pydvs.dvs_img(fcloud, cmb)
+ 
+    cmb = undistort_img(cmb, K, D)
+ 
+    cnt_img = cmb[:,:,0] + cmb[:,:,2] + 1e-8
+    timg = cmb[:,:,1]
+    
+    timg[cnt_img < 0.99] = 0
+    timg /= cnt_img
+
     cmb[:,:,0] *= global_scale_pp
     cmb[:,:,1] *= 255.0 / slice_width
     cmb[:,:,2] *= global_scale_pn
 
-    cmb = undistort_img(cmb, K, D)
     return cmb
+    return cmb.astype(np.uint8)
+
 
 
 def get_mask_paths(folder_path, every_nth):

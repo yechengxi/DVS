@@ -21,7 +21,7 @@ static PyObject* dvs_img(PyObject* self, PyObject* args)
     float *out_dataptr = (float *) PyArray_DATA(out_array);
 
     int n_events = PyArray_SIZE(in_array) / 4;
-    float t0   = in_dataptr[0];
+    float t0   = (n_events > 0) ? in_dataptr[0] : 0;
     for (unsigned long i = 0; i < n_events; ++i) { 
         float t   = in_dataptr[i * 4 + 0];
         int x     = in_dataptr[i * 4 + 1];
