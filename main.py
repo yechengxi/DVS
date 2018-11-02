@@ -372,8 +372,11 @@ def train(args, train_loader, disp_net, pose_exp_net, pixel_net, optimizer, epoc
     start_time = time.time()
     end = time.time()
 
-    for i, (seqs, slices, intrinsics, intrinsics_inv,depth) in enumerate(train_loader):
-
+    for i, data in enumerate(train_loader):
+        if len(data)==5:
+            seqs, slices, intrinsics, intrinsics_inv, depth=data
+        else:
+            seqs, slices, intrinsics, intrinsics_inv=data
         # measure data loading time
         data_time.update(time.time() - end)
         tgt_img=seqs.pop((args.sequence_length-1)//2)
@@ -387,7 +390,7 @@ def train(args, train_loader, disp_net, pose_exp_net, pixel_net, optimizer, epoc
         intrinsics_var = intrinsics.cuda()
         intrinsics_inv_var = intrinsics_inv.cuda()
 
-        depth=depth.cuda().unsqueeze(1)
+
         ego_flows=None
 
         if args.mode==0:
@@ -402,14 +405,11 @@ def train(args, train_loader, disp_net, pose_exp_net, pixel_net, optimizer, epoc
             depth = [1/disp for disp in disparities]
             explainability_mask,pose = pose_exp_net(tgt_img_var, ref_imgs_var)
 
-            pose = pose[:, 0:1]
-            explainability_mask = [(m[:, :1] if m is not None else m) for m in explainability_mask]
-
-
         else:
             explainability_mask,pixel_pose = pixel_net(tgt_img_var, ref_imgs_var)
 
             with torch.no_grad():
+                depth = depth.cuda().unsqueeze(1)
                 # compute output
                 disparities=[]
                 disp=1 / (depth/100 + .001)
@@ -424,10 +424,19 @@ def train(args, train_loader, disp_net, pose_exp_net, pixel_net, optimizer, epoc
 
             pose=pixel_pose
 
-        loss_1, warped_refs, ego_flows = args.sharpness_loss(slices,
-                                                             intrinsics_var, intrinsics_inv_var,
-                                                             depth, explainability_mask, pose,
-                                                             args.padding_mode)
+        if args.sharp:
+            pose=pose[:,0:1]
+            explainability_mask=[(m[:,:1] if m is not None else m) for m in explainability_mask]
+            loss_1,warped_refs,ego_flows = args.sharpness_loss(slices,
+                                                    intrinsics_var, intrinsics_inv_var,
+                                                    depth, explainability_mask, pose,
+                                                    args.padding_mode)
+        else:
+            loss_1,warped_refs,ego_flows = args.simple_photometric_reconstruction_loss(tgt_img_var, ref_imgs_var,
+                                                                 intrinsics_var, intrinsics_inv_var,
+                                                                 depth, explainability_mask, pose,
+                                                                 args.ssim_weight, args.padding_mode)
+
 
         loss_1=loss_1.mean()
 
@@ -605,7 +614,8 @@ def validate_without_gt(args, val_loader, disp_net, pose_exp_net, epoch, output_
 
             if args.sharp:
                 pose=pose[:, 0:1]
-                explainability_mask = explainability_mask[:,:1]
+                if explainability_mask is not None:
+                    explainability_mask = explainability_mask[:,:1]
                 loss_1,warped_refs,ego_flows = args.sharpness_loss(slices,
                                                          intrinsics_var, intrinsics_inv_var,
                                                          depth, explainability_mask, pose,
