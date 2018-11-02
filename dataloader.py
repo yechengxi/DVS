@@ -47,8 +47,9 @@ def get_slice(cloud, idx, ts, width, mode=0, idx_step=0.01):
     idx_0 = idx_[0]
     idx_ -= idx_0
 
-    t0 = sl[0][0]
-    sl[:,0] -= t0
+    if (sl.shape[0] > 0):
+        t0 = sl[0][0]
+        sl[:,0] -= t0
 
     return sl, idx_
 
@@ -71,22 +72,27 @@ def undistort_img(img, K, D):
 
 
 def dvs_img(cloud, shape, K, D):
-    fcloud = cloud.astype(np.float32) # Important!
-
     cmb = np.zeros((shape[0], shape[1], 3), dtype=np.float32)
+    if (cloud.shape[0] == 0):
+        return cmb
+
+    fcloud = cloud.astype(np.float32)  # Important!
     pydvs.dvs_img(fcloud, cmb)
 
-    #print("Float:",nz_avg(cmb, 0), nz_avg(cmb, 1), nz_avg(cmb, 2))
-
-    cmb[:,:,0] *= 50
-    cmb[:,:,1] *= 255.0 / 0.05
-    cmb[:,:,2] *= 50
-
     cmb = undistort_img(cmb, K, D)
-    cmb = np.uint8(cmb)
 
-    #print("Int:",nz_avg(cmb, 0), nz_avg(cmb, 1), nz_avg(cmb, 2))
+    cnt_img = cmb[:, :, 0] + cmb[:, :, 2] + 1e-8
+    timg = cmb[:, :, 1]
+
+    timg[cnt_img < 0.99] = 0
+    timg /= cnt_img
+
+    cmb[:, :, 0] *= 50
+    cmb[:, :, 1] *= 255.0 / 0.05
+    cmb[:, :, 2] *= 50
+
     return cmb
+    return cmb.astype(np.uint8)
 
 
 def load_scene_p(queue,scene_path,with_gt=False):
