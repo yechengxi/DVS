@@ -233,6 +233,24 @@ def explainability_loss(mask):
     return loss/weight
 
 
+class depth_loss(nn.Module):
+    def __init__(self):
+        super(depth_loss, self).__init__()
+    def forward(self, gt, predicts):
+        weight=0
+        abs_rel=0.
+
+        for pred in predicts:
+            N, C, H, W = pred.shape
+            current_gt = F.adaptive_avg_pool2d(gt, (H, W))
+            weight += H * W
+            valid = ((current_gt > 1/255) * (current_gt < 1000/255)).type_as(gt)
+            #valid_pred = valid_pred * torch.median(valid_gt) / torch.median(pred)
+            #thresh = torch.max((valid_gt / valid_pred), (valid_pred / valid_gt))
+            cost=(torch.abs(current_gt - pred) / current_gt)*valid
+            abs_rel += cost.view(N, -1).mean(1)*H*W
+
+        return abs_rel/weight
 
 
 class joint_smooth_loss(nn.Module):

@@ -78,6 +78,7 @@ parser.add_argument('--log-full', default='progress_log_full.csv', metavar='PATH
                     help='csv where to save per-gradient descent train stats')
 parser.add_argument('--photo-loss-weight', type=float, help='weight for photometric loss', metavar='W', default=1)
 parser.add_argument('-m', '--mask-loss-weight', type=float, help='weight for explainabilty mask loss', metavar='W', default=0)
+parser.add_argument('-d', '--depth-loss-weight', type=float, help='weight for depth loss', metavar='W', default=1)
 parser.add_argument('--nls', action='store_true', help='use non-local smoothness')
 parser.add_argument('-s', '--smooth-loss-weight', type=float, help='weight for disparity smoothness loss', metavar='W', default=0.1)
 parser.add_argument('-o','--flow-smooth-loss-weight', type=float, help='weight for optical flow smoothness loss', metavar='W', default=0.0)
@@ -260,6 +261,9 @@ def main():
     args.non_local_smooth_loss = torch.nn.DataParallel(args.non_local_smooth_loss)
 
 
+    args.depth_loss=depth_loss().cuda()
+    args.depth_loss=torch.nn.DataParallel(args.depth_loss)
+
 
     print('=> setting adam solver')
     if args.mode==0:
@@ -361,7 +365,7 @@ def train(args, train_loader, disp_net, pose_exp_net, pixel_net, optimizer, epoc
     batch_time = AverageMeter()
     data_time = AverageMeter()
     losses = AverageMeter(precision=4)
-    w1, w2, w3 ,w4, w5, w6 = args.photo_loss_weight, args.mask_loss_weight, args.smooth_loss_weight,0.,args.flow_smooth_loss_weight,0.
+    w1, w2, w3 ,w4, w5, w6 = args.photo_loss_weight, args.mask_loss_weight, args.smooth_loss_weight,0.,args.flow_smooth_loss_weight,args.depth_loss_weight
 
     loss,loss_1,loss_2,loss_3,loss_4,loss_5,loss_6=0,0,0,0,0,0,0
     # switch to train mode
@@ -374,7 +378,7 @@ def train(args, train_loader, disp_net, pose_exp_net, pixel_net, optimizer, epoc
 
     for i, data in enumerate(train_loader):
         if len(data)==5:
-            seqs, slices, intrinsics, intrinsics_inv, depth=data
+            seqs, slices, intrinsics, intrinsics_inv, gt_depth=data
         else:
             seqs, slices, intrinsics, intrinsics_inv=data
         # measure data loading time
@@ -389,7 +393,6 @@ def train(args, train_loader, disp_net, pose_exp_net, pixel_net, optimizer, epoc
 
         intrinsics_var = intrinsics.cuda()
         intrinsics_inv_var = intrinsics_inv.cuda()
-
 
         ego_flows=None
 
@@ -409,7 +412,7 @@ def train(args, train_loader, disp_net, pose_exp_net, pixel_net, optimizer, epoc
             explainability_mask,pixel_pose = pixel_net(tgt_img_var, ref_imgs_var)
 
             with torch.no_grad():
-                depth = depth.cuda().unsqueeze(1)
+                depth = gt_depth.cuda().unsqueeze(1)
                 # compute output
                 disparities=[]
                 disp=1 / (depth/100 + .001)
@@ -450,7 +453,6 @@ def train(args, train_loader, disp_net, pose_exp_net, pixel_net, optimizer, epoc
                 loss_3 = args.non_local_smooth_loss(depth)
             else:
                 loss_3 = args.smooth_loss(depth)#args.smooth_loss(depth)
-                #loss_3 = args.joint_smooth_loss(depth,tgt_img_var)
 
             loss_3=loss_3.mean()
 
@@ -473,8 +475,27 @@ def train(args, train_loader, disp_net, pose_exp_net, pixel_net, optimizer, epoc
             w5=0
 
         loss_6 = 0
+        if w6>0 and args.with_gt:
+            #gt_depth=gt_depth.cuda()
+            gt_disp=1/gt_depth
+            mean_disp = gt_disp.view(b, -1).mean(-1).view(b, 1, 1, 1)
+            gt_disp = gt_disp / mean_disp
+
+            loss_6+=args.depth_loss(gt_depth,depth).mean()
+        else:
+            w5=0
 
         loss = w1*loss_1 + w2*loss_2 + w3*loss_3 + w4*loss_4 +w5*loss_5+w6*loss_6
+
+
+
+
+
+        #log results
+
+
+
+
 
         if i > 0 and n_iter % args.print_freq == 0:
             train_writer.add_scalar('photometric_error', loss_1.item(), n_iter)
@@ -484,11 +505,16 @@ def train(args, train_loader, disp_net, pose_exp_net, pixel_net, optimizer, epoc
                 train_writer.add_scalar('disparity_smoothness_loss', loss_3.item(), n_iter)
             if w5 > 0:
                 train_writer.add_scalar('flow_smooth_loss', loss_5.item(), n_iter)
+            if w6 > 0 and args.with_gt:
+                train_writer.add_scalar('depth_loss', loss_6.item(), n_iter)
             train_writer.add_scalar('total_loss', loss.item(), n_iter)
 
         if args.training_output_freq > 0 and n_iter % args.training_output_freq == 0:
 
             train_writer.add_image('train Input', tensor2array(tgt_img[0],max_value=1,colormap='bone'), n_iter)
+            if args.with_gt:
+                train_writer.add_image('train gt disp', tensor2array(gt_disp[0].cpu().data, max_value=None, colormap='bone'), n_iter)
+                train_writer.add_image('train gt depth', tensor2array(gt_depth[0].cpu().data, max_value=None), n_iter)
 
             for r in range(len(seqs)):
                 tmp = ref_imgs_var[r][0].data.cpu()
@@ -754,6 +780,8 @@ def validate_with_gt(args, val_loader, disp_net, pose_exp_net, epoch, output_wri
 
 
             depth = depth.cuda()
+            if len(depth.shape)==4:
+                depth=depth.squeeze(1)
 
             # compute output
             output_disp = disp_net(tgt_img_var)

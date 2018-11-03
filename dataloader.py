@@ -191,8 +191,9 @@ class NewCloudSequenceFolder(data.Dataset):
 
             if self.gt:#only save the portion we use
                 #self.scenes[id]['depth'] = self.scenes[id]['depth'][split:]
+
                 self.scenes[id]['depth'][np.isnan(self.scenes[id]['depth'])]=1e4 #reset nan
-                self.scenes[id]['depth'][self.scenes[id]['depth']<=1e-2]=1e4 #reset nan
+                self.scenes[id]['depth'][self.scenes[id]['depth']<=10]=1e4 #reset nan
 
 
 
@@ -231,17 +232,21 @@ class NewCloudSequenceFolder(data.Dataset):
         else:
             self.transform=self.test_transform
 
+        if self.gt: #and (not self.train)
+            depth=[self.scenes[scene_id]['depth'][index]]
+        else:
+            depth=[]
+
         if self.transform is not None:
-            imgs, intrinsics = self.transform(seqs +slices, np.copy(self.scenes[scene_id]['K']))
+            imgs, intrinsics = self.transform(seqs +slices+depth, np.copy(self.scenes[scene_id]['K']))
             seqs = imgs[:self.sequence_length]
             slices=imgs[self.sequence_length:]
         else:
             intrinsics = np.copy(self.scenes[scene_id]['K'])
 
-
         if self.gt: #and (not self.train)
+            depth=slices.pop(-1)
             #index-=self.scenes[scene_id]['n_train']
-            depth=self.scenes[scene_id]['depth'][index]
             return seqs, slices, intrinsics, np.linalg.inv(intrinsics),depth
         else:
             return seqs, slices, intrinsics, np.linalg.inv(intrinsics)
