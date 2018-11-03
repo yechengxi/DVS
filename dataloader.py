@@ -18,7 +18,7 @@ global_shape = (200, 346)
 
 import cv2
 
-def get_slice(cloud, idx, ts, width, mode=0, idx_step=0.01):
+def get_slice(cloud, idx, ts, width, mode=1, idx_step=0.01):
     ts_lo = ts
     ts_hi = ts + width
     if (mode == 1):
@@ -70,6 +70,10 @@ def undistort_img(img, K, D):
     img_undistorted = cv2.fisheye.undistortImage(img, K, D=D, Knew=Knew)
     return img_undistorted
 
+def get_mask(shape, K, D):
+    mask = np.ones((shape[0], shape[1]), dtype=np.float32)
+    mask = undistort_img(mask, K, D)
+    return mask
 
 def dvs_img(cloud, shape, K, D):
     cmb = np.zeros((shape[0], shape[1], 3), dtype=np.float32)
@@ -93,6 +97,7 @@ def dvs_img(cloud, shape, K, D):
 
     return cmb
     return cmb.astype(np.uint8)
+
 
 
 def load_scene_p(queue,scene_path,with_gt=False):
@@ -192,9 +197,9 @@ class NewCloudSequenceFolder(data.Dataset):
             if self.gt:#only save the portion we use
                 #self.scenes[id]['depth'] = self.scenes[id]['depth'][split:]
 
-                self.scenes[id]['depth'][np.isnan(self.scenes[id]['depth'])]=1e4 #reset nan
-                self.scenes[id]['depth'][self.scenes[id]['depth']<=10]=1e4 #reset nan
-
+                #self.scenes[id]['depth'][np.isnan(self.scenes[id]['depth'])]=1e4 #reset nan
+                #self.scenes[id]['depth'][self.scenes[id]['depth']<=10]=1e4 #reset nan
+                pass
 
 
     def __getitem__(self, index):
@@ -206,7 +211,7 @@ class NewCloudSequenceFolder(data.Dataset):
 
         cloud = self.scenes[scene_id]['events']
         cloud_idx =self.scenes[scene_id]['index']
-        sl, idx = get_slice(cloud, cloud_idx, gt_ts, 0.25, 2, self.scenes[scene_id]['discretization'])
+        sl, idx = get_slice(cloud, cloud_idx, gt_ts, 0.25, 1, self.scenes[scene_id]['discretization'])
 
         n_slice = len(idx)
         idx = list(idx) + [len(sl)]
@@ -233,7 +238,14 @@ class NewCloudSequenceFolder(data.Dataset):
             self.transform=self.test_transform
 
         if self.gt: #and (not self.train)
-            depth=[self.scenes[scene_id]['depth'][index]]
+            depth=self.scenes[scene_id]['depth'][index]
+            mask = get_mask(global_shape, self.scenes[scene_id]['K'], self.scenes[scene_id]['D'])
+            mask=(mask>=1)
+            d=depth[mask]
+            depth=(depth-d.min())/(d.max()-d.min())*255
+            depth[np.logical_not(mask)]=1e4
+            depth[depth<3] = 1e4
+            depth=[depth]
         else:
             depth=[]
 
