@@ -99,22 +99,6 @@ def dvs_img(cloud, shape, K, D):
     return cmb.astype(np.uint8)
 
 
-
-def load_scene_p(queue,scene_path,with_gt=False):
-    scene_npz = np.load(scene_path)
-    scene = {}
-    scene['events']= scene_npz['events']#.astype(np.float32)
-    scene['index']= scene_npz['index']
-    scene['discretization']= scene_npz['discretization']
-    scene['K']= scene_npz['K'].astype(np.float32)
-    scene['D']= scene_npz['D'].astype(np.float32)
-    if with_gt:
-        scene['depth'] = scene_npz['depth'].astype(np.float32)
-    scene['gt_ts']= scene_npz['gt_ts']
-    #scene['flow']= scene_npz['flow']
-    queue.put(scene)
-
-
 def load_scene_s(scene_path, with_gt=False):
     scene_npz = np.load(scene_path)
     scene = {}
@@ -168,19 +152,14 @@ class NewCloudSequenceFolder(data.Dataset):
             print('loading time:', t_e-t_s)
 
         else:
-            from multiprocessing import Process,Queue
+            from multiprocessing import Pool
+            from functools import partial
+            load_scene = partial(load_scene_s, with_gt=self.gt)
+            p = Pool(8)
             t_s=time.time()
-            queue = Queue()
-            procs = []
-            for id in range(self.n_scenes):
-                print('scene: ',id)
-                proc = Process(target=load_scene_p, args=(queue,scenes[id],self.gt))
-                procs.append(proc)
-                proc.start()
-            self.scenes=[queue.get() for p in procs]
-            for p in procs:
-                p.join()
-                print('join')
+            self.scenes = p.map(load_scene, scenes)
+            p.close()
+
             t_e  = time.time()
 
             print('loading time:', t_e-t_s)
@@ -244,7 +223,7 @@ class NewCloudSequenceFolder(data.Dataset):
             d=depth[mask]
             depth=(depth-d.min())/(d.max()-d.min())*255
             depth[np.logical_not(mask)]=1e4
-            depth[depth<3] = 1e4
+            depth[depth<=1] = 1e4
             depth=[depth]
         else:
             depth=[]

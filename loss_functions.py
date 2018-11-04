@@ -236,7 +236,7 @@ def explainability_loss(mask):
 class depth_loss(nn.Module):
     def __init__(self):
         super(depth_loss, self).__init__()
-    def forward(self, gt, predicts):
+    def forward(self, gt, predicts,eps=1e-5):
         weight=0
         abs_rel=0.
         acc=0.
@@ -247,8 +247,8 @@ class depth_loss(nn.Module):
             valid = ((current_gt > 1/255) * (current_gt < 1000/255)).type_as(gt)
             masked_gt=current_gt*valid
             masked_pred=pred*valid
-            pred = pred * (torch.mean(masked_gt.view(N,-1),1) / (1e-5+torch.mean(masked_pred.view(N,-1),1))).view(N,1,1,1)
-            thresh = torch.max((masked_gt / (1e-5+pred)), (pred / (1e-5+masked_gt)))*valid
+            pred = pred * (torch.mean(masked_gt.view(N,-1),1) / (eps+torch.mean(masked_pred.view(N,-1),1))).view(N,1,1,1)
+            thresh = torch.max((masked_gt / (eps+pred)), (pred / (eps+masked_gt)))*valid
             cost=(torch.abs(current_gt - pred) / current_gt)*valid
             abs_rel += cost.view(N, -1).mean(1)*H*W
             acc+=thresh.view(N,-1).mean(1)*H*W
