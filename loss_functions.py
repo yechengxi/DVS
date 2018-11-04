@@ -239,18 +239,20 @@ class depth_loss(nn.Module):
     def forward(self, gt, predicts):
         weight=0
         abs_rel=0.
-
+        acc=0.
         for pred in predicts:
             N, C, H, W = pred.shape
             current_gt = F.adaptive_avg_pool2d(gt, (H, W))
             weight += H * W
             valid = ((current_gt > 1/255) * (current_gt < 1000/255)).type_as(gt)
-            #valid_pred = valid_pred * torch.median(valid_gt) / torch.median(pred)
-            #thresh = torch.max((valid_gt / valid_pred), (valid_pred / valid_gt))
+            masked_gt=current_gt*valid
+            masked_pred=pred*valid
+            pred = pred * (torch.mean(masked_gt.view(N,-1),1) / (1e-5+torch.mean(masked_pred.view(N,-1),1))).view(N,1,1,1)
+            thresh = torch.max((masked_gt / (1e-5+pred)), (pred / (1e-5+masked_gt)))*valid
             cost=(torch.abs(current_gt - pred) / current_gt)*valid
             abs_rel += cost.view(N, -1).mean(1)*H*W
-
-        return abs_rel/weight
+            acc+=thresh.view(N,-1).mean(1)*H*W
+        return (abs_rel+acc)/weight
 
 
 class joint_smooth_loss(nn.Module):
