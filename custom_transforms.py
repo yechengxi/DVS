@@ -74,13 +74,12 @@ class RandomScaleCrop(object):
         assert intrinsics is not None
         output_intrinsics = np.copy(intrinsics)
 
-        in_h, in_w,in_c = images[0].shape
-        x_scaling, y_scaling = np.random.uniform(1,1.15,2)
+        in_h, in_w = images[0].shape[:2]
+        x_scaling, y_scaling = np.random.uniform(1.1,1.35,2)
         scaled_h, scaled_w = int(in_h * y_scaling), int(in_w * x_scaling)
 
         output_intrinsics[0] *= x_scaling
         output_intrinsics[1] *= y_scaling
-        scaled_images=[]
         scaled_images = [resize(im, (scaled_w,scaled_h)) for im in images]
         offset_y = np.random.randint(scaled_h - in_h + 1)
         offset_x = np.random.randint(scaled_w - in_w + 1)

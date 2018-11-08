@@ -266,7 +266,7 @@ class ECN_Disp(nn.Module):
 
 
 class ECN_Pose(nn.Module):
-    def __init__(self, input_size, nb_ref_imgs=2, init_planes=16, scale_factor=0.5, growth_rate=16,
+    def __init__(self, input_size, nb_ref_imgs=2, in_planes=3,init_planes=16, scale_factor=0.5, growth_rate=16,
                  final_map_size=1, output_exp=False,
                  norm_type='gn'):
         super(ECN_Pose, self).__init__()
@@ -279,7 +279,7 @@ class ECN_Pose(nn.Module):
         self.output_exp = output_exp
         self.pred_planes = nb_ref_imgs
 
-        in_planes = (1 + nb_ref_imgs) *3
+        in_planes = (1 + nb_ref_imgs) *in_planes
 
         out_planes = init_planes
         output_size = input_size

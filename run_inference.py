@@ -10,6 +10,8 @@ from utils import tensor2array
 
 from inverse_warp import *
 from flowlib import *
+from dataloader import *
+
 
 parser = argparse.ArgumentParser(description='Inference script for DispNet learned with \
                                  Structure from Motion Learner inference on KITTI and CityScapes Dataset',
@@ -22,7 +24,6 @@ parser.add_argument("--pretrained-posenet", default=None, type=str, help="pretra
 parser.add_argument("--img-height", default=200, type=int, help="Image height")
 parser.add_argument("--img-width", default=346, type=int, help="Image width")
 parser.add_argument("--no-resize", action='store_true', help="no resizing is done")
-parser.add_argument("--multi", action='store_true', help="multi image depth")
 parser.add_argument('--sequence-length', type=int, metavar='N', help='sequence length for training', default=3)
 
 parser.add_argument("--dataset-list", default=None, type=str, help="Dataset list file")
@@ -43,13 +44,11 @@ parser.add_argument('--scale-factor', default=1. / 2.,
 parser.add_argument('--final-map-size', default=1, type=int, help='final map size')
 
 
-
 def main():
     args = parser.parse_args()
     if not(args.output_disp or args.output_depth):
         print('You must at least output one value !')
         return
-
 
     if args.arch=='ecn':
         disp_net = models.ECN_Disp(input_size=args.img_height,init_planes=args.n_channel,scale_factor=args.scale_factor,growth_rate=args.growth_rate,final_map_size=args.final_map_size,norm_type=args.norm_type).cuda()
@@ -66,9 +65,7 @@ def main():
             pose_net = models.ECN_Pose(input_size=args.img_height, nb_ref_imgs=args.sequence_length - 1,
                                            init_planes=args.n_channel // 2, scale_factor=args.scale_factor,
                                            growth_rate=args.growth_rate // 2, final_map_size=args.final_map_size,
-                                           output_exp=True, output_exp2=True,
-                                           output_pixel_pose=True,
-                                           output_disp=args.multi, norm_type=args.norm_type).cuda()
+                                           output_exp=True, norm_type=args.norm_type).cuda()
         else:
             pose_net = models.PoseExpNet(nb_ref_imgs=args.sequence_length - 1, output_exp=True,
                                              output_pixel_pose=False, output_disp=False).cuda()
@@ -86,92 +83,45 @@ def main():
     import os
     import glob
     import time
+    import custom_transforms
+    valid_transform = custom_transforms.Compose([custom_transforms.ArrayToTensor(),
+                                                #normalize
+                                                ])
+    valid_set = NewCloudSequenceFolder(
+        args.dataset_dir,
+        train_transform=None,
+        test_transform=valid_transform,
+        train=False,
+        sequence_length=args.sequence_length,
+        slices=0,
+        gt=False
+    )
 
-    scene=os.path.join(args.dataset_dir)
-    #intrinsics = np.genfromtxt(dataset_dir / args.dataset_list+'_cam.txt').astype(np.float32).reshape((3, 3))
-    intrinsics = np.genfromtxt(dataset_dir / 'cam.txt').astype(np.float32).reshape((3, 3))
-
-    intrinsics_inv = np.linalg.inv(intrinsics)
-
-    intrinsics = torch.from_numpy(intrinsics).unsqueeze(0).cuda()
-    intrinsics_inv = torch.from_numpy(intrinsics_inv).unsqueeze(0).cuda()
-    #imgs = sorted(glob.glob(scene + '_cmb_*.jpg'))
-    imgs = sorted(glob.glob(os.path.join(scene , '*.jpg')))
-
-    print('{} files to test'.format(len(imgs)))
-
-    #for file in tqdm(test_files):
+    print('{} files to test'.format(len(valid_set)))
 
     class File:
         basename=None
         ext=None
 
-    demi_length = (args.sequence_length - 1) // 2
-    shifts = list(range(-demi_length, demi_length + 1))
-    shifts.pop(demi_length)
-
-    for i in range(demi_length,len(imgs)-demi_length):
-
+    for i in range(len(valid_set)):
         file =File()
-        file.namebase=os.path.basename(imgs[i]).replace('.jpg','')
+        file.namebase=str(i)
         file.ext='.jpg'
-
-        img0 = imread(imgs[i]).astype(np.float32)
-
-        ref_imgs=[]
-        for j in shifts:
-            ref_imgs.append(imread(imgs[i + j]).astype(np.float32))
-
-        h, w, _ = img0.shape
-
-        if (not args.no_resize) and (h != args.img_height or w != args.img_width):
-            img0 = imresize(img0, (args.img_height, args.img_width)).astype(np.float32)
-            ref_imgs=[imresize(im, (args.img_height, args.img_width)).astype(np.float32) for im in ref_imgs]
-
+        seq=valid_set[i][0]
+        img=seq[(len(seq)-1)//2]
+        _, h, w = img.shape
 
         with torch.no_grad():
-
-            img = np.transpose(img0, (2, 0, 1))
-            ref_imgs = [np.transpose(im, (2, 0, 1)) for im in ref_imgs]
-            img = torch.from_numpy(img).unsqueeze(0)
-            ref_imgs = [torch.from_numpy(im).unsqueeze(0) for im in ref_imgs]
-            img = (img / 255 ).cuda()
-            ref_imgs = [(im / 255 ).cuda() for im in ref_imgs]
-
-
-            output_s= disp_net(img)#,raw_disp
-
-            output_depth = 1 / output_s
-
-            if args.pretrained_posenet is not None:
-                explainability_mask, explainability_mask2, pixel_pose, output_m, pose= pose_net(img, ref_imgs)#,raw_disp
-
-                if args.arch=='ecn':
-                    _, ego_flow = get_new_grid(output_depth[0], pose[:,int((args.sequence_length-1)/2)], intrinsics, intrinsics_inv)
-                else:
-                    _, ego_flow = inverse_warp(ref_imgs[int((args.sequence_length-1)/2)], output_depth[:, 0], pose[:,int((args.sequence_length-1)/2)], intrinsics,
-                                               intrinsics_inv, 'euler', 'border')
-
-                ego_flow=ego_flow[0].data.cpu().numpy()
-                write_flow(ego_flow,output_dir / 'ego_flow_{}{}'.format(file.namebase, '.flo'))
-                #tmp=read_flow(output_dir / 'ego_flow_{}{}'.format(file.namebase, '.flo'))
-                ego_flow = flow_to_image(ego_flow)
-                imsave(output_dir / 'ego_flow_{}{}'.format(file.namebase, file.ext), ego_flow)
-
-
-            output_s=output_s[0].cpu()
+            img=img.unsqueeze(0).cuda()
+            output= disp_net(img)
+            output_depth = 1 / output
+            output=output[0].cpu()
             output_depth=output_depth[0,0].cpu()
 
             if args.output_disp:
-                disp = (255*tensor2array(output_s, max_value=None, colormap='bone')).astype(np.uint8)
+                disp = (255*tensor2array(output, max_value=None, colormap='bone')).astype(np.uint8).transpose((1,2,0))
                 imsave(output_dir/'disp_{}{}'.format(file.namebase,file.ext), disp)
                 np.save(output_dir/'depth_{}{}'.format(file.namebase,'.npy'),output_depth.data.numpy())
-                if args.pretrained_posenet is not None:
-                    cat_im=np.concatenate((img0,disp,ego_flow),axis=1)
-                else:
-                    cat_im=np.concatenate((img0,disp),axis=1)
-                imsave(output_dir / 'cat_{}{}'.format(file.namebase, file.ext), cat_im)
-
 
 if __name__ == '__main__':
     main()

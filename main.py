@@ -152,15 +152,24 @@ def main():
                                                 ])
 
     print("=> fetching scenes in '{}'".format(args.data))
-    train_set = NewCloudSequenceFolder(
-        args.data,
-        train_transform=train_transform,
-        test_transform=valid_transform,
-        train=True,
-        sequence_length=args.sequence_length,
-        slices=args.slices,
-        gt=args.with_gt
-    )
+    if args.mode==0 or args.mode==1:
+        train_set = NewCloudSequenceFolder(
+            args.data,
+            train_transform=train_transform,
+            test_transform=valid_transform,
+            train=True,
+            sequence_length=args.sequence_length,
+            slices=args.slices,
+            gt=args.with_gt
+        )
+    if args.mode==2:
+        train_set = ImSequenceFolder(
+            args.data,
+            train_transform=train_transform,
+            test_transform=valid_transform,
+            train=True,
+            sequence_length=args.sequence_length
+            )
 
     # if no Groundtruth is avalaible, Validation set is the same type as training set to measure photometric loss from warping
     """
@@ -193,8 +202,12 @@ def main():
     # create model
     print("=> creating model")
 
+    if args.mode==2:
+        in_planes=1
+    else:
+        in_planes=3
 
-    disp_net = models.ECN_Disp(input_size=200*args.scale,
+    disp_net = models.ECN_Disp(input_size=200*args.scale,in_planes=in_planes,
                                init_planes=args.n_channel,scale_factor=args.scale_factor,growth_rate=args.growth_rate,final_map_size=args.final_map_size,norm_type=args.norm_type).cuda()
 
 
@@ -202,7 +215,7 @@ def main():
     if not output_exp:
         print("=> no mask loss, PoseExpnet will only output pose")
 
-    pose_exp_net = models.ECN_Pose(input_size=200*args.scale,
+    pose_exp_net = models.ECN_Pose(input_size=200*args.scale,in_planes=in_planes,
                                    nb_ref_imgs=args.sequence_length - 1,init_planes=args.n_channel//2,scale_factor=args.scale_factor,growth_rate=args.growth_rate//2,final_map_size=args.final_map_size,
                                       output_exp=output_exp,norm_type=args.norm_type).cuda()
 
@@ -212,28 +225,26 @@ def main():
                                       output_exp=output_exp,
                                       norm_type=args.norm_type).cuda()
 
-    if args.mode==0:
-        if args.pretrained_posenet:
-            print("=> using pre-trained weights for explainabilty and pose net")
-            weights = torch.load(args.pretrained_posenet)
-            pose_exp_net.load_state_dict(weights['state_dict'], strict=False)
-        else:
-            pose_exp_net.init_weights()
-
-
-        if args.pretrained_dispnet:
-            print("=> using pre-trained weights for Dispnet")
-            weights = torch.load(args.pretrained_dispnet)
-            disp_net.load_state_dict(weights['state_dict'])
-        else:
-            disp_net.init_weights()
+    if args.pretrained_posenet:
+        print("=> using pre-trained weights for explainabilty and pose net")
+        weights = torch.load(args.pretrained_posenet)
+        pose_exp_net.load_state_dict(weights['state_dict'], strict=False)
     else:
-        if args.pretrained_pixelnet:
-            print("=> using pre-trained weights for pixel net")
-            weights = torch.load(args.pretrained_posenet)
-            pixel_net.load_state_dict(weights['state_dict'], strict=False)
-        else:
-            pixel_net.init_weights()
+        pose_exp_net.init_weights()
+
+
+    if args.pretrained_dispnet:
+        print("=> using pre-trained weights for Dispnet")
+        weights = torch.load(args.pretrained_dispnet)
+        disp_net.load_state_dict(weights['state_dict'])
+    else:
+        disp_net.init_weights()
+    if args.pretrained_pixelnet:
+        print("=> using pre-trained weights for pixel net")
+        weights = torch.load(args.pretrained_pixelnet)
+        pixel_net.load_state_dict(weights['state_dict'], strict=False)
+    else:
+        pixel_net.init_weights()
 
     cudnn.benchmark = True
 
@@ -266,7 +277,7 @@ def main():
 
 
     print('=> setting adam solver')
-    if args.mode==0:
+    if args.mode==0 or args.mode==2:
 
         parameters = chain(disp_net.parameters(), pose_exp_net.parameters())
         parameters = filter(lambda p: p.requires_grad, parameters)
@@ -275,15 +286,16 @@ def main():
 
         parameters = chain(disp_net.parameters(), pose_exp_net.parameters())
         parameters = filter(lambda p: p.requires_grad, parameters)
-    else:
-        parameters = pixel_net.parameters()
+
+    if args.mode == 1:
+
+        parameters = chain(disp_net.parameters(), pixel_net.parameters())
         parameters = filter(lambda p: p.requires_grad, parameters)
         params = sum([np.prod(p.size()) for p in parameters])
-        print(params, 'trainable parameters in the network.')
+        print(params,'trainable parameters in the network.')
 
-        parameters = pixel_net.parameters()
+        parameters = chain(disp_net.parameters(), pixel_net.parameters())
         parameters = filter(lambda p: p.requires_grad, parameters)
-
     if args.optimizer == 'SGD':
         optimizer = torch.optim.SGD(parameters, lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
     elif args.optimizer == 'Adam':
@@ -383,52 +395,43 @@ def train(args, train_loader, disp_net, pose_exp_net, pixel_net, optimizer, epoc
             seqs, slices, intrinsics, intrinsics_inv=data
         # measure data loading time
         data_time.update(time.time() - end)
-        tgt_img=seqs.pop((args.sequence_length-1)//2)
-        ref_imgs = seqs
+
+        if args.mode==0 or args.mode==1:
+            tgt_img=seqs.pop((args.sequence_length-1)//2)
+            ref_imgs = seqs
+            if args.sharp:
+                slices = [img.cuda() for img in slices]
+        if args.mode==2:
+            tgt_img, ref_imgs, intrinsics, intrinsics_inv = data
 
         tgt_img_var = tgt_img.cuda()
         ref_imgs_var = [img.cuda() for img in ref_imgs]
-        if args.sharp:
-            slices = [img.cuda() for img in slices]
 
         intrinsics_var = intrinsics.cuda()
         intrinsics_inv_var = intrinsics_inv.cuda()
 
         ego_flows=None
 
-        if args.mode==0:
-            # compute output
-            disparities = disp_net(tgt_img_var)
+        # compute output
+        disparities = disp_net(tgt_img_var)
 
-            #normalize
-            b = tgt_img.shape[0]
-            mean_disp=disparities[0].view(b,-1).mean(-1).view(b,1,1,1)*0.1
+        # normalize
+        b = tgt_img.shape[0]
+        mean_disp = disparities[0].view(b, -1).mean(-1).view(b, 1, 1, 1) * 0.1
 
-            disparities=[disp/mean_disp for disp in disparities]
-            depth = [1/disp for disp in disparities]
+        disparities = [disp / mean_disp for disp in disparities]
+        depth = [1 / disp for disp in disparities]
+
+        if args.mode==0 or args.mode==2:
             explainability_mask,pose = pose_exp_net(tgt_img_var, ref_imgs_var)
-
-        else:
+        if args.mode == 1:
             explainability_mask,pixel_pose = pixel_net(tgt_img_var, ref_imgs_var)
-
-            with torch.no_grad():
-                depth = gt_depth.cuda().unsqueeze(1)
-                # compute output
-                disparities=[]
-                disp=1 / (depth/100 + .001)
-                for p in pixel_pose:
-                    _,_,H,W=p.shape
-                    disparities.append(F.adaptive_avg_pool2d(disp,(H,W)))
-                # normalize the depth
-                b = tgt_img.shape[0]
-                mean_disp = disparities[0].view(b, -1).mean(-1).view(b, 1, 1, 1) * 0.1
-                disparities = [disp / mean_disp for disp in disparities]
-                depth = [1 / disp for disp in disparities]
-
             pose=pixel_pose
 
         if args.sharp:
-            pose=pose[:,0:1]
+            if type(pose) not in [tuple, list]:
+                pose=pose[:,0:1]
+
             explainability_mask=[(m[:,:1] if m is not None else m) for m in explainability_mask]
             loss_1,warped_refs,ego_flows = args.sharpness_loss(slices,
                                                     intrinsics_var, intrinsics_inv_var,
