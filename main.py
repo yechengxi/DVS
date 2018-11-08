@@ -638,6 +638,7 @@ def validate_without_gt(args, val_loader, disp_net, pose_exp_net, epoch, output_
 
     return losses.avg, ['Total loss', 'Photo loss', 'Exp loss']
 
+from models import scaling
 
 def validate_with_gt(args, val_loader, disp_net, pose_exp_net, epoch, output_writers=[]):
     batch_time = AverageMeter()
