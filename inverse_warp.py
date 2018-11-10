@@ -339,11 +339,12 @@ def get_multigrid(depth, pose,seq_len,intrinsics,intrinsics_inv):
     lst = list(range(-(seq_len - 1) // 2, seq_len // 2 + 1))
     if seq_len%2==0:
         del lst[len(lst) // 2]
+        seq_len=seq_len+1
     for i in lst:
-        flows.append(flow*(i/(seq_len-1)))
+        flows.append(flow*(i/seq_len))
         #print((flow*(i/seq_len)).mean())
 
-        new_pixel_coords=flow*(i/(seq_len-1))+pixel_coords
+        new_pixel_coords=flow*(i/seq_len)+pixel_coords
 
         grids.append(torch.stack([2*new_pixel_coords[:, :, :, 0] / (w - 1) -1., 2*new_pixel_coords[:, :, :, 1] / (h - 1) -1.], dim=3))
 

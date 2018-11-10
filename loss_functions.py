@@ -14,40 +14,37 @@ class simple_photometric_reconstruction_loss(nn.Module):
 
     def forward(self, tgt_img, ref_imgs, intrinsics, intrinsics_inv, depth, explainability_mask, pose,ssim_w=0.,padding_mode='zeros'):
         def one_scale(depth,explainability_mask,pose):
-
             reconstruction_loss = 0
             b, _, h, w = depth.size()
             downscale = tgt_img.size(2)/h
             ego_flows_scaled=[]
             refs_warped_scaled = []
+            grids=[]
             tgt_img_scaled = nn.functional.adaptive_avg_pool2d(tgt_img, (h, w))
             ref_imgs_scaled = [nn.functional.adaptive_avg_pool2d(ref_img, (h, w)) for ref_img in ref_imgs]
             intrinsics_scaled = torch.cat((intrinsics[:, 0:2]/downscale, intrinsics[:, 2:]), dim=1)
             intrinsics_scaled_inv = torch.cat((intrinsics_inv[:, :, 0:2]*downscale, intrinsics_inv[:, :, 2:]), dim=2)
+            if pose.size(1)==1 or pose.size(1)==6:
+                refs_warped_scaled, grids, ego_flows_scaled = multi_inverse_warp(ref_imgs_scaled, depth[:, 0], pose,
+                                                                              intrinsics_scaled,
+                                                                              intrinsics_scaled_inv, padding_mode)
 
-            for i, ref_img in enumerate(ref_imgs_scaled):
-                if pose.size(1) == len(ref_imgs):
-                    current_pose = pose[:, i]
-                elif pose.size(1)==len(ref_imgs)*6:
-                    current_pose=pose[:,i*6:(i+1)*6]
+            else:
 
-                ref_img_warped,_,ego_flow = simple_inverse_warp(ref_img, depth[:,0], current_pose, intrinsics_scaled, intrinsics_scaled_inv, padding_mode)
-                out_of_bound = 1 - (ref_img_warped == 0).prod(1, keepdim=True).type_as(ref_img_warped)
+                for i, ref_img in enumerate(ref_imgs_scaled):
+                    if pose.size(1) == len(ref_imgs):
+                        current_pose = pose[:, i]
+                    elif pose.size(1)==len(ref_imgs)*6:
+                        current_pose=pose[:,i*6:(i+1)*6]
+                    ref_img_warped,grid,ego_flow = simple_inverse_warp(ref_img, depth[:,0], current_pose, intrinsics_scaled, intrinsics_scaled_inv, padding_mode)
+                    refs_warped_scaled.append(ref_img_warped)
+                    grids.append(grid)
+                    ego_flows_scaled.append(ego_flow)
 
-                diff = (tgt_img_scaled - ref_img_warped) * out_of_bound
-                if explainability_mask is not None:
-                    diff = diff * explainability_mask[:,i:i+1].expand_as(diff)
-                if ssim_w>0 and min(ref_img_warped.shape[2:])>11:
-                    mask=1
-                    if explainability_mask is not None:
-                        mask=explainability_mask[:, i:i + 1]
-                    ssim_loss = ssim(tgt_img_scaled,ref_img_warped,size_average=False,mask=out_of_bound*mask)
-                else:
-                    ssim_loss=0.
-
-                reconstruction_loss += diff.abs().view(b,-1).mean(1)+ssim_w*ssim_loss
-                ego_flows_scaled.append(ego_flow)
-                refs_warped_scaled.append(ref_img_warped)
+            for i in range(len(refs_warped_scaled)):
+                #grid = grids[i]
+                diff = (tgt_img_scaled - refs_warped_scaled[i])
+                reconstruction_loss += diff.abs().view(b,-1).mean(1)
             return reconstruction_loss,refs_warped_scaled,ego_flows_scaled
 
         if type(explainability_mask) not in [tuple, list]:

@@ -152,7 +152,7 @@ def main():
                                                 ])
 
     print("=> fetching scenes in '{}'".format(args.data))
-    if args.mode==0 or args.mode==1:
+    if args.mode==0 or args.mode==1 or args.mode==3:
         train_set = NewCloudSequenceFolder(
             args.data,
             train_transform=train_transform,
@@ -296,6 +296,17 @@ def main():
 
         parameters = chain(disp_net.parameters(), pixel_net.parameters())
         parameters = filter(lambda p: p.requires_grad, parameters)
+
+    if args.mode == 3:
+
+        parameters = chain(disp_net.parameters(), pose_exp_net.parameters(), pixel_net.parameters())
+        parameters = filter(lambda p: p.requires_grad, parameters)
+        params = sum([np.prod(p.size()) for p in parameters])
+        print(params,'trainable parameters in the network.')
+
+        parameters = chain(disp_net.parameters(), pose_exp_net.parameters(), pixel_net.parameters())
+        parameters = filter(lambda p: p.requires_grad, parameters)
+
     if args.optimizer == 'SGD':
         optimizer = torch.optim.SGD(parameters, lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
     elif args.optimizer == 'Adam':
@@ -396,7 +407,7 @@ def train(args, train_loader, disp_net, pose_exp_net, pixel_net, optimizer, epoc
         # measure data loading time
         data_time.update(time.time() - end)
 
-        if args.mode==0 or args.mode==1:
+        if args.mode==0 or args.mode==1 or args.mode==3:
             tgt_img=seqs.pop((args.sequence_length-1)//2)
             ref_imgs = seqs
             if args.sharp:
@@ -422,27 +433,29 @@ def train(args, train_loader, disp_net, pose_exp_net, pixel_net, optimizer, epoc
         disparities = [disp / mean_disp for disp in disparities]
         depth = [1 / disp for disp in disparities]
 
-        if args.mode==0 or args.mode==2:
+        if args.mode==0 or args.mode==2 or args.mode==3:
             explainability_mask,pose = pose_exp_net(tgt_img_var, ref_imgs_var)
-        if args.mode == 1:
+        if args.mode == 1 or args.mode==3:
             explainability_mask,pixel_pose = pixel_net(tgt_img_var, ref_imgs_var)
             pose=pixel_pose
+
+        if type(pose) not in [tuple, list]:
+            pose = pose[:, 0:1]
+        loss_1, warped_refs, ego_flows = args.simple_photometric_reconstruction_loss(tgt_img_var, ref_imgs_var,
+                                                                                     intrinsics_var, intrinsics_inv_var,
+                                                                                     depth, explainability_mask, pose,
+                                                                                     args.ssim_weight,
+                                                                                     args.padding_mode)
 
         if args.sharp:
             if type(pose) not in [tuple, list]:
                 pose=pose[:,0:1]
-
             explainability_mask=[(m[:,:1] if m is not None else m) for m in explainability_mask]
-            loss_1,warped_refs,ego_flows = args.sharpness_loss(slices,
+            loss_1_slices,warped_slices,ego_flows_slices = args.sharpness_loss(slices,
                                                     intrinsics_var, intrinsics_inv_var,
                                                     depth, explainability_mask, pose,
                                                     args.padding_mode)
-        else:
-            loss_1,warped_refs,ego_flows = args.simple_photometric_reconstruction_loss(tgt_img_var, ref_imgs_var,
-                                                                 intrinsics_var, intrinsics_inv_var,
-                                                                 depth, explainability_mask, pose,
-                                                                 args.ssim_weight, args.padding_mode)
-
+            loss_1=loss_1+loss_1_slices
 
         loss_1=loss_1.mean()
 
@@ -452,13 +465,8 @@ def train(args, train_loader, disp_net, pose_exp_net, pixel_net, optimizer, epoc
             loss_2 = 0
 
         if w3 > 0:
-            if args.nls:
-                loss_3 = args.non_local_smooth_loss(depth)
-            else:
-                loss_3 = args.smooth_loss(depth)#args.smooth_loss(depth)
-
+            loss_3 = args.smooth_loss(depth)#args.smooth_loss(depth)
             loss_3=loss_3.mean()
-
         else:
             loss_3=0.
 
@@ -492,12 +500,7 @@ def train(args, train_loader, disp_net, pose_exp_net, pixel_net, optimizer, epoc
 
 
 
-
-
         #log results
-
-
-
 
 
         if i > 0 and n_iter % args.print_freq == 0:
@@ -519,13 +522,13 @@ def train(args, train_loader, disp_net, pose_exp_net, pixel_net, optimizer, epoc
                 train_writer.add_image('train gt disp', tensor2array(gt_disp[0].cpu().data, max_value=None, colormap='bone'), n_iter)
                 train_writer.add_image('train gt depth', tensor2array(gt_depth[0].cpu().data, max_value=None), n_iter)
 
-            for r in range(len(seqs)):
-                tmp = ref_imgs_var[r][0].data.cpu()
-                train_writer.add_image('Trained Warped Inputs {}'.format(r),
-                                       tensor2array(tmp, max_value=None, colormap='bone'), n_iter)
-                tmp = tgt_img_var[0].data.cpu()
-                train_writer.add_image('Trained Warped tgt',
-                                       tensor2array(tmp, max_value=None, colormap='bone'), n_iter)
+            if args.sharp:
+                for j in range(len(warped_slices[0])):
+                    if j == 0 or j == len(warped_slices[0]) - 1 or j == ((len(warped_slices[0]) - 1) // 2):
+                        train_writer.add_image('warped slice {}'.format(j), tensor2array(warped_slices[0][j][0].data.cpu(), max_value=1, colormap='bone'),
+                                               n_iter)
+
+
 
             for k,scaled_depth in enumerate(depth):
                 train_writer.add_image('train Dispnet Output Normalized {}'.format(k),tensor2array(disparities[k].data[0].cpu(), max_value=None, colormap='bone'),n_iter)
@@ -544,7 +547,7 @@ def train(args, train_loader, disp_net, pose_exp_net, pixel_net, optimizer, epoc
 
                 for j in range(len(warped_refs_scaled)):
 
-                    if j == 0 or j == len(warped_refs_scaled) - 1:
+                    if j == 0 or j == len(warped_refs_scaled) - 1 or j==((len(warped_refs_scaled) - 1)//2):
                         if explainability_mask[k] is not None:
                             if not args.sharp or j==0:
                                 train_writer.add_image('train Exp mask Outputs {} {}'.format(k, j),
