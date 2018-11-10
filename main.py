@@ -81,6 +81,7 @@ parser.add_argument('-m', '--mask-loss-weight', type=float, help='weight for exp
 parser.add_argument('-d', '--depth-loss-weight', type=float, help='weight for depth loss', metavar='W', default=1)
 parser.add_argument('--nls', action='store_true', help='use non-local smoothness')
 parser.add_argument('-s', '--smooth-loss-weight', type=float, help='weight for disparity smoothness loss', metavar='W', default=0.1)
+parser.add_argument('-p', '--pose-smooth-loss-weight', type=float, help='weight for pose smoothness loss', metavar='W', default=0.1)
 parser.add_argument('-o','--flow-smooth-loss-weight', type=float, help='weight for optical flow smoothness loss', metavar='W', default=0.0)
 parser.add_argument('--ssim-weight', type=float, help='weight for ssim loss', metavar='W', default=0.)
 
@@ -265,6 +266,9 @@ def main():
     args.smooth_loss=smooth_loss().cuda()
     args.smooth_loss = torch.nn.DataParallel(args.smooth_loss)
 
+    args.pose_smooth_loss=pose_smooth_loss().cuda()
+    args.pose_smooth_loss = torch.nn.DataParallel(args.pose_smooth_loss)
+
     args.joint_smooth_loss=joint_smooth_loss().cuda()
     args.joint_smooth_loss = torch.nn.DataParallel(args.joint_smooth_loss)
 
@@ -388,7 +392,7 @@ def train(args, train_loader, disp_net, pose_exp_net, pixel_net, optimizer, epoc
     batch_time = AverageMeter()
     data_time = AverageMeter()
     losses = AverageMeter(precision=4)
-    w1, w2, w3 ,w4, w5, w6 = args.photo_loss_weight, args.mask_loss_weight, args.smooth_loss_weight,0.,args.flow_smooth_loss_weight,args.depth_loss_weight
+    w1, w2, w3 ,w4, w5, w6 = args.photo_loss_weight, args.mask_loss_weight, args.smooth_loss_weight,args.pose_smooth_loss_weight,args.flow_smooth_loss_weight,args.depth_loss_weight
 
     loss,loss_1,loss_2,loss_3,loss_4,loss_5,loss_6=0,0,0,0,0,0,0
     # switch to train mode
@@ -470,7 +474,11 @@ def train(args, train_loader, disp_net, pose_exp_net, pixel_net, optimizer, epoc
         else:
             loss_3=0.
 
-        loss_4 = 0
+        if w4 > 0:
+            loss_4 = args.pose_smooth_loss(depth)
+            loss_4=loss_4.mean()
+        else:
+            loss_4=0.
 
         loss_5 = 0
         if w5>0 and ego_flows is not None:
@@ -498,10 +506,7 @@ def train(args, train_loader, disp_net, pose_exp_net, pixel_net, optimizer, epoc
 
         loss = w1*loss_1 + w2*loss_2 + w3*loss_3 + w4*loss_4 +w5*loss_5+w6*loss_6
 
-
-
         #log results
-
 
         if i > 0 and n_iter % args.print_freq == 0:
             train_writer.add_scalar('photometric_error', loss_1.item(), n_iter)
@@ -509,6 +514,8 @@ def train(args, train_loader, disp_net, pose_exp_net, pixel_net, optimizer, epoc
                 train_writer.add_scalar('explanability_loss', loss_2.item(), n_iter)
             if w3 > 0:
                 train_writer.add_scalar('disparity_smoothness_loss', loss_3.item(), n_iter)
+            if w4 > 0:
+                train_writer.add_scalar('pose_smoothness_loss', loss_4.item(), n_iter)
             if w5 > 0:
                 train_writer.add_scalar('flow_smooth_loss', loss_5.item(), n_iter)
             if w6 > 0 and args.with_gt:
@@ -525,10 +532,7 @@ def train(args, train_loader, disp_net, pose_exp_net, pixel_net, optimizer, epoc
             if args.sharp:
                 for j in range(len(warped_slices[0])):
                     if j == 0 or j == len(warped_slices[0]) - 1 or j == ((len(warped_slices[0]) - 1) // 2):
-                        train_writer.add_image('warped slice {}'.format(j), tensor2array(warped_slices[0][j][0].data.cpu(), max_value=1, colormap='bone'),
-                                               n_iter)
-
-
+                        train_writer.add_image('warped slice {}'.format(j), tensor2array(warped_slices[0][j][0].data.cpu(), max_value=1, colormap='bone'),n_iter)
 
             for k,scaled_depth in enumerate(depth):
                 train_writer.add_image('train Dispnet Output Normalized {}'.format(k),tensor2array(disparities[k].data[0].cpu(), max_value=None, colormap='bone'),n_iter)
@@ -547,27 +551,25 @@ def train(args, train_loader, disp_net, pose_exp_net, pixel_net, optimizer, epoc
 
                 for j in range(len(warped_refs_scaled)):
 
-                    if j == 0 or j == len(warped_refs_scaled) - 1 or j==((len(warped_refs_scaled) - 1)//2):
-                        if explainability_mask[k] is not None:
-                            if not args.sharp or j==0:
-                                train_writer.add_image('train Exp mask Outputs {} {}'.format(k, j),
-                                                       tensor2array(explainability_mask[k][0, j].data.cpu(), max_value=1,
-                                                                    colormap='bone'), n_iter)
+                    if explainability_mask[k] is not None:
+                        if not args.sharp or j==0:
+                            train_writer.add_image('train Exp mask Outputs {} {}'.format(k, j),
+                                                   tensor2array(explainability_mask[k][0, j].data.cpu(), max_value=1,
+                                                                colormap='bone'), n_iter)
 
-                        ref_warped = warped_refs_scaled[j][0]
-                        stacked_im = stacked_im + ref_warped
+                    ref_warped = warped_refs_scaled[j][0]
+                    stacked_im = stacked_im + ref_warped
 
-                        if ego_flows is not None:
-                            ego_flow = flow_to_image(ego_flows[k][j][0].data.cpu().numpy()).transpose(2,0,1)
-                            train_writer.add_image('ego flow {} {}'.format(k, j), ego_flow / 255, n_iter)
+                    if ego_flows is not None:
+                        ego_flow = flow_to_image(ego_flows[k][j][0].data.cpu().numpy()).transpose(2,0,1)
+                        train_writer.add_image('ego flow {} {}'.format(k, j), ego_flow / 255, n_iter)
 
-                        train_writer.add_image('train Warped Outputs {} {}'.format(k, j),
-                                               tensor2array(ref_warped.data.cpu(), colormap='bone', max_value=1), n_iter)
+                    train_writer.add_image('train Warped Outputs {} {}'.format(k, j),
+                                           tensor2array(ref_warped.data.cpu(), colormap='bone', max_value=1), n_iter)
 
-                        train_writer.add_image('train Diff Outputs {} {}'.format(k, j),
-                                               tensor2array((middle_slice - ref_warped).abs().data.cpu(), colormap='bone',
-                                                            max_value=1.), n_iter)
-
+                    train_writer.add_image('train Diff Outputs {} {}'.format(k, j),
+                                           tensor2array((middle_slice - ref_warped).abs().data.cpu(), colormap='bone',
+                                                        max_value=1.), n_iter)
 
                 stacked_im[1]=0
                 train_writer.add_image('train stacked Outputs {}'.format(k), tensor2array(stacked_im.abs().data.cpu(),colormap='bone',max_value=None), n_iter)

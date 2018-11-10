@@ -353,29 +353,28 @@ class non_local_smooth_loss(nn.Module):
 
 
 
-def pose_smooth_loss(pred_map,pose_ego):
-    def gradient(pred):
-        D_dy = pred[:, :, 1:] - pred[:, :, :-1]
-        D_dx = pred[:, :, :, 1:] - pred[:, :, :, :-1]
-        return D_dx, D_dy
+class pose_smooth_loss(nn.Module):
+    def __init__(self):
+        super(pose_smooth_loss, self).__init__()
 
-    if type(pred_map) not in [tuple, list]:
-        pred_map = [pred_map]
+    def forward(self, pred_map):
+        def gradient(pred):
+            D_dy = pred[:, :, 1:] - pred[:, :, :-1]
+            D_dx = pred[:, :, :, 1:] - pred[:, :, :, :-1]
+            return D_dx, D_dy
 
-    loss = 0
-    weight = 1
-    for scaled_map in pred_map:
-        N, _, H, W = scaled_map.shape
-        if H > 3 and W > 3:
-            scaled_map=scaled_map-pose_ego.view(N,-1,1,1)
-            dx, dy = gradient(scaled_map)
-            dx2, dxdy = gradient(dx)
-            dydx, dy2 = gradient(dy)
-            loss += (dx2.abs().view(N, -1).mean(1) + dxdy.abs().view(N, -1).mean(1) + dydx.abs().view(N, -1).mean(
-                1) + dy2.abs().view(N, -1).mean(1)) * weight
+        if type(pred_map) not in [tuple, list]:
+            pred_map = [pred_map]
 
-            weight /= 2.3 # don't ask me why it works better
-    return loss
+        loss = 0
+        weight = 0
+        for scaled_map in pred_map:
+            N, _, H, W = scaled_map.shape
+            if H > 3 and W > 3:
+                dx, dy = gradient(scaled_map)
+                loss += (dx.abs().view(N, -1).mean(1) + dy.abs().view(N, -1).mean(1)) * H*W
+                weight += H*W
+        return loss/weight
 
 
 
