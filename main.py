@@ -350,17 +350,17 @@ def train(args, train_loader, disp_net, pose_exp_net,optimizer, epoch_size,  tra
 
         depth = [1/disp for disp in disparities]
         explainability_mask, pose, pixel_pose, final_pose = pose_exp_net(tgt_img_var, ref_imgs_var)
-        ego_flows=None
-        rigid_flows=None
+        final_flows=None
+        pixel_flows=None
 
 
 
-        loss_1,warped_refs, ego_flows = args.simple_photometric_reconstruction_loss(tgt_img_var, ref_imgs_var,
+        loss_1,warped_refs, final_flows = args.simple_photometric_reconstruction_loss(tgt_img_var, ref_imgs_var,
                                                              intrinsics_var, intrinsics_inv_var,
                                                              depth, explainability_mask, final_pose,
                                                              args.ssim_weight, args.padding_mode)
 
-        loss_1_2, warped_refs_2, rigid_flows = args.simple_photometric_reconstruction_loss(tgt_img_var, ref_imgs_var,
+        loss_1_2, warped_refs_2, pixel_flows = args.simple_photometric_reconstruction_loss(tgt_img_var, ref_imgs_var,
                                                                                      intrinsics_var, intrinsics_inv_var,
                                                                                      depth, explainability_mask, pixel_pose,
                                                                                      args.ssim_weight,
@@ -393,18 +393,18 @@ def train(args, train_loader, disp_net, pose_exp_net,optimizer, epoch_size,  tra
             loss_4=0.
 
         loss_5 = 0
-        if w5>0 and ego_flows is not None:
-            stacked_ego_flow=[]
-            stacked_rigid_flow=[]
-            if ego_flows is not None:
-                for i in range(len(ego_flows)):
-                    if ego_flows is not None:
-                        tmp=torch.cat(ego_flows[i],dim=3).permute(0,3,1,2)
-                        stacked_ego_flow.append(tmp)
-            if len(stacked_ego_flow)>0:
-                loss_5+=args.smooth_loss(stacked_ego_flow).mean()
-            if len(stacked_rigid_flow) > 0:
-                loss_5 += args.smooth_loss(stacked_rigid_flow).mean()
+        if w5>0 and final_flows is not None:
+            stacked_final_flow=[]
+            stacked_pixel_flow=[]
+            if final_flows is not None:
+                for i in range(len(final_flows)):
+                    if final_flows is not None:
+                        tmp=torch.cat(final_flows[i],dim=3).permute(0,3,1,2)
+                        stacked_final_flow.append(tmp)
+            if len(stacked_final_flow)>0:
+                loss_5+=args.smooth_loss(stacked_final_flow).mean()
+            if len(stacked_pixel_flow) > 0:
+                loss_5 += args.smooth_loss(stacked_pixel_flow).mean()
         else:
             w5=0
 
@@ -468,15 +468,13 @@ def train(args, train_loader, disp_net, pose_exp_net,optimizer, epoch_size,  tra
                     ref_warped = warped_refs_scaled[j][0]
                     stacked_im = stacked_im + ref_warped
 
-                    if ego_flows is not None:
-                        ego_flow = flow_to_image(ego_flows[k][j][0].data.cpu().numpy()).transpose(2,0,1)
-                        train_writer.add_image('ego flow {} {}'.format(k, j), ego_flow / 255, n_iter)
+                    if final_flows is not None:
+                        final_flow = flow_to_image(final_flows[k][j][0].data.cpu().numpy()).transpose(2,0,1)
+                        train_writer.add_image('final flow {} {}'.format(k, j), final_flow / 255, n_iter)
 
-                    if rigid_flows is not None:
-                        rigid_flow = flow_to_image(rigid_flows[k][j][0].data.cpu().numpy()).transpose(2, 0, 1)
-                        res_flow=flow_to_image((rigid_flows[k][j][0]-ego_flows[k][j][0]).data.cpu().numpy()).transpose(2, 0, 1)
-                        train_writer.add_image('rigid flow {} {}'.format(k, j), rigid_flow / 255, n_iter)
-                        train_writer.add_image('residual flow {} {}'.format(k, j), res_flow / 255, n_iter)
+                    if pixel_flows is not None:
+                        pixel_flow = flow_to_image(pixel_flows[k][j][0].data.cpu().numpy()).transpose(2, 0, 1)
+                        train_writer.add_image('pixel flow {} {}'.format(k, j), pixel_flow / 255, n_iter)
 
                     train_writer.add_image('train Warped Outputs {} {}'.format(k, j),
                                            tensor2array(ref_warped.data.cpu(), colormap='bone', max_value=1), n_iter)
@@ -560,7 +558,7 @@ def validate_with_gt(args, val_loader, disp_net, pose_exp_net, epoch, output_wri
             explainability_mask, pose,pixel_pose, final_pose = pose_exp_net(tgt_img_var, ref_imgs_var)
 
 
-            loss_1, warped_refs, ego_flows = args.simple_photometric_reconstruction_loss(tgt_img_var, ref_imgs_var,
+            loss_1, warped_refs, final_flows = args.simple_photometric_reconstruction_loss(tgt_img_var, ref_imgs_var,
                                                                                          intrinsics_var,
                                                                                          intrinsics_inv_var,
                                                                                          output_depth, explainability_mask,
@@ -597,9 +595,9 @@ def validate_with_gt(args, val_loader, disp_net, pose_exp_net, epoch, output_wri
 
 
                 for j,ref in enumerate(ref_imgs_var):
-                    ego_flow = ego_flows[0][j][0]
-                    ego_flow = flow_to_image(ego_flow.data.cpu().numpy()).transpose(2, 0, 1)
-                    output_writers[index].add_image('val ego flow {}'.format(j), ego_flow / 255, n_iter)
+                    final_flow = final_flows[0][j][0]
+                    final_flow = flow_to_image(final_flow.data.cpu().numpy()).transpose(2, 0, 1)
+                    output_writers[index].add_image('val final flow {}'.format(j), final_flow / 255, n_iter)
 
                     ref_warped = warped_refs[0][j][0]
                     output_writers[index].add_image('val Warped Outputs {}'.format(j), tensor2array(ref_warped.data.cpu(),colormap='bone',max_value=1), n_iter)
