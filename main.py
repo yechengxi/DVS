@@ -121,7 +121,7 @@ def main():
     global best_error, n_iter
     args = parser.parse_args()
     args.with_gt=True
-    
+
     save_path = save_path_formatter(args, parser)
     args.save_path = 'checkpoints'/save_path
     print('=> will save everything to {}'.format(args.save_path))
