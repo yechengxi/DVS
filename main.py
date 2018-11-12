@@ -20,7 +20,7 @@ from utils import *
 
 from inverse_warp import inverse_warp,simple_inverse_warp
 
-from loss_functions import photometric_reconstruction_loss,simple_photometric_reconstruction_loss,two_stage_photometric_reconstruction_loss, explainability_loss, smooth_loss,non_local_smooth_loss, compute_errors,pose_smooth_loss,ssim,msssim
+from loss_functions import *
 from logger import AverageMeter
 from itertools import chain
 from tensorboardX import SummaryWriter
@@ -61,10 +61,12 @@ parser.add_argument('--print-freq', default=10, type=int,
                     metavar='N', help='print frequency')
 parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
                     help='evaluate model on validation set')
-parser.add_argument('--pretrained-disp', dest='pretrained_disp', default=None, metavar='PATH',
+parser.add_argument('--pretrained-dispnet', dest='pretrained_dispnet', default=None, metavar='PATH',
                     help='path to pre-trained dispnet model')
-parser.add_argument('--pretrained-exppose', dest='pretrained_exp_pose', default=None, metavar='PATH',
+parser.add_argument('--pretrained-posenet', dest='pretrained_posenet', default=None, metavar='PATH',
                     help='path to pre-trained Exp Pose net model')
+parser.add_argument('--pretrained-pixelnet', dest='pretrained_pixelnet', default=None, metavar='PATH',
+                    help='path to pre-trained Pixel net model')
 parser.add_argument('--seed', default=1, type=int, help='seed for random functions, and network initialization')
 parser.add_argument('--log-summary', default='progress_log_summary.csv', metavar='PATH',
                     help='csv where to save per-epoch train and valid stats')
@@ -72,11 +74,11 @@ parser.add_argument('--log-full', default='progress_log_full.csv', metavar='PATH
                     help='csv where to save per-gradient descent train stats')
 parser.add_argument('--photo-loss-weight', type=float, help='weight for photometric loss', metavar='W', default=1)
 parser.add_argument('-m', '--mask-loss-weight', type=float, help='weight for explainabilty mask loss', metavar='W', default=0)
+parser.add_argument('-d', '--depth-loss-weight', type=float, help='weight for depth loss', metavar='W', default=1)
 parser.add_argument('--still-loss-weight', type=float, help='weight for still mask loss', metavar='W', default=0.0)
 parser.add_argument('--nls', action='store_true', help='use non-local smoothness')
 parser.add_argument('-s', '--smooth-loss-weight', type=float, help='weight for disparity smoothness loss', metavar='W', default=0.1)
-parser.add_argument('-p','--pose-smooth-loss-weight', type=float, help='weight for pose smoothness loss', metavar='W', default=0.)
-parser.add_argument('-c','--consistency-loss-weight', type=float, help='weight for consistency loss', metavar='W', default=0.0)
+parser.add_argument('-p','--pose-loss-weight', type=float, help='weight for pose smoothness loss', metavar='W', default=0.)
 parser.add_argument('-o','--flow-smooth-loss-weight', type=float, help='weight for optical flow smoothness loss', metavar='W', default=0.0)
 parser.add_argument('--ssim-weight', type=float, help='weight for ssim loss', metavar='W', default=0.)
 
@@ -148,7 +150,7 @@ def main():
                                                 ])
 
     print("=> fetching scenes in '{}'".format(args.data))
-    train_set = StackedSequenceFolder(
+    train_set = LabSequenceFolder(
         args.data,
         transform=train_transform,
         seed=args.seed,
@@ -158,7 +160,7 @@ def main():
     )
 
     # if no Groundtruth is avalaible, Validation set is the same type as training set to measure photometric loss from warping
-    val_set = StackedSequenceFolder(
+    val_set = LabSequenceFolder(
         args.data,
         transform=valid_transform,
         seed=args.seed,
@@ -184,63 +186,54 @@ def main():
     print("=> creating model")
 
 
-    if args.arch=='ecn':
-        disp_net = models.ECN_Disp(input_size=200*args.scale,#260*args.scale*.5,
-                                   init_planes=args.n_channel,scale_factor=args.scale_factor,growth_rate=args.growth_rate,final_map_size=args.final_map_size,norm_type=args.norm_type).cuda()
-    else:
-        disp_net = models.DispNetS().cuda()
-
-    #disp_net=models.CasNet_Depth(input_size=128,in_planes=3, init_planes=32,growth_rate=32).cuda()
+    disp_net = models.ECN_Disp(input_size=260,#260*args.scale*.5,
+                               init_planes=args.n_channel,scale_factor=args.scale_factor,growth_rate=args.growth_rate,final_map_size=args.final_map_size,norm_type=args.norm_type).cuda()
 
     output_exp = args.mask_loss_weight > 0
-    output_exp2=args.pose_smooth_loss_weight>0
+    output_exp2=args.pose_loss_weight>0
     if not output_exp:
         print("=> no mask loss, PoseExpnet will only output pose")
-    output_pixel_pose=args.pose_smooth_loss_weight>0
-    output_disp=args.multi
+    output_pixel_pose=args.pose_loss_weight>0
 
-    if args.arch == 'ecn':
-        pose_exp_net = models.ECN_Pose(input_size=200*args.scale,#260*args.scale*.5,
-                                       nb_ref_imgs=args.sequence_length - 1,init_planes=args.n_channel//2,scale_factor=args.scale_factor,growth_rate=args.growth_rate//2,final_map_size=args.final_map_size,
-                                          output_exp=output_exp,norm_type=args.norm_type).cuda()
-    else:
-        pose_exp_net = models.PoseExpNet(nb_ref_imgs=args.sequence_length - 1, output_exp=output_exp,output_pixel_pose=output_pixel_pose,output_disp=output_disp).cuda()
+    pose_exp_net = models.ECN_Pose(input_size=260,#260*args.scale*.5,
+                                   nb_ref_imgs=args.sequence_length - 1,init_planes=args.n_channel//2,scale_factor=args.scale_factor,growth_rate=args.growth_rate//2,final_map_size=args.final_map_size,
+                                      output_exp=output_exp,norm_type=args.norm_type).cuda()
 
-    if args.pretrained_exp_pose:
+
+    if args.pretrained_posenet:
         print("=> using pre-trained weights for explainabilty and pose net")
-        weights = torch.load(args.pretrained_exp_pose)
+        weights = torch.load(args.pretrained_posenet)
         pose_exp_net.load_state_dict(weights['state_dict'], strict=False)
     else:
         pose_exp_net.init_weights()
 
-    if args.pretrained_disp:
+    if args.pretrained_dispnet:
         print("=> using pre-trained weights for Dispnet")
-        weights = torch.load(args.pretrained_disp)
+        weights = torch.load(args.pretrained_dispnet)
         disp_net.load_state_dict(weights['state_dict'])
     else:
         disp_net.init_weights()
+
+
 
     cudnn.benchmark = True
     disp_net = torch.nn.DataParallel(disp_net)
     pose_exp_net = torch.nn.DataParallel(pose_exp_net)
 
-    args.photometric_reconstruction_loss=photometric_reconstruction_loss().cuda()
-    args.photometric_reconstruction_loss=torch.nn.DataParallel(args.photometric_reconstruction_loss)
-
     args.simple_photometric_reconstruction_loss = simple_photometric_reconstruction_loss().cuda()
     args.simple_photometric_reconstruction_loss = torch.nn.DataParallel(args.simple_photometric_reconstruction_loss)
-
-
-    args.two_stage_photometric_reconstruction_loss = two_stage_photometric_reconstruction_loss().cuda()
-    args.two_stage_photometric_reconstruction_loss = torch.nn.DataParallel(args.two_stage_photometric_reconstruction_loss)
 
     args.smooth_loss=smooth_loss().cuda()
     args.smooth_loss = torch.nn.DataParallel(args.smooth_loss)
 
-    args.non_local_smooth_loss=non_local_smooth_loss().cuda()
-    args.non_local_smooth_loss = torch.nn.DataParallel(args.non_local_smooth_loss)
+    args.explainability_loss=explainability_loss().cuda()
+    args.explainability_loss = torch.nn.DataParallel(args.explainability_loss)
 
+    args.pose_smooth_loss=pose_smooth_loss().cuda()
+    args.pose_smooth_loss = torch.nn.DataParallel(args.pose_smooth_loss)
 
+    args.depth_loss=depth_loss().cuda()
+    args.depth_loss=torch.nn.DataParallel(args.depth_loss)
 
     print('=> setting adam solver')
 
@@ -324,12 +317,12 @@ def main():
 
 from random import random
 
-def train(args, train_loader, disp_net, pose_exp_net, optimizer, epoch_size,  train_writer):
+def train(args, train_loader, disp_net, pose_exp_net,optimizer, epoch_size,  train_writer):
     global n_iter
     batch_time = AverageMeter()
     data_time = AverageMeter()
     losses = AverageMeter(precision=4)
-    w1, w2, w3 ,w4, w5, w6 = args.photo_loss_weight, args.mask_loss_weight, args.smooth_loss_weight,args.pose_smooth_loss_weight,args.flow_smooth_loss_weight,args.consistency_loss_weight
+    w1, w2, w3 ,w4, w5, w6 = args.photo_loss_weight, args.mask_loss_weight, args.smooth_loss_weight,args.pose_loss_weight,args.flow_smooth_loss_weight,args.depth_loss_weight
 
     loss,loss_1,loss_2,loss_3,loss_4,loss_5,loss_6=0,0,0,0,0,0,0
     # switch to train mode
@@ -339,7 +332,12 @@ def train(args, train_loader, disp_net, pose_exp_net, optimizer, epoch_size,  tr
     start_time = time.time()
     end = time.time()
 
-    for i, (tgt_img, ref_imgs, intrinsics, intrinsics_inv) in enumerate(train_loader):
+    for i, data in enumerate(train_loader):
+        if len(data)==4:
+            tgt_img, ref_imgs, intrinsics, intrinsics_inv=data
+        if len(data)==5:
+            tgt_img, ref_imgs, intrinsics, intrinsics_inv, gt_depth=data
+
         # measure data loading time
         data_time.update(time.time() - end)
         tgt_img_var = tgt_img.cuda()
@@ -347,42 +345,59 @@ def train(args, train_loader, disp_net, pose_exp_net, optimizer, epoch_size,  tr
         intrinsics_var = intrinsics.cuda()
         intrinsics_inv_var = intrinsics_inv.cuda()
 
+
         # compute output
         disparities = disp_net(tgt_img_var)
-        depth = [1/disp for disp in disparities]
-        explainability_mask, pose = pose_exp_net(tgt_img_var, ref_imgs_var)
-        ego_flows=None
 
-        if not args.simple:
-            loss_1,ego_flows = args.photometric_reconstruction_loss(tgt_img_var, ref_imgs_var,
-                                                     intrinsics_var, intrinsics_inv_var,
-                                                     depth, explainability_mask, pose,
-                                                     args.rotation_mode, args.padding_mode)
-        else:
-            loss_1,ego_flows = args.simple_photometric_reconstruction_loss(tgt_img_var, ref_imgs_var,
-                                                                 intrinsics_var, intrinsics_inv_var,
-                                                                 depth, explainability_mask, pose,
-                                                                 args.ssim_weight, args.padding_mode)
+        # normalize
+        b = tgt_img.shape[0]
+        mean_disp = disparities[0].view(b, -1).mean(-1).view(b, 1, 1, 1) * 0.1
+        disparities = [disp / mean_disp for disp in disparities]
+
+        depth = [1/disp for disp in disparities]
+        explainability_mask, pose, pixel_pose = pose_exp_net(tgt_img_var, ref_imgs_var)
+        ego_flows=None
+        rigid_flows=None
+
+
+        if type(pose) not in [tuple, list]:
+            pose = pose[:, 0:1]
+        loss_1,warped_refs, ego_flows = args.simple_photometric_reconstruction_loss(tgt_img_var, ref_imgs_var,
+                                                             intrinsics_var, intrinsics_inv_var,
+                                                             depth, explainability_mask, pose,
+                                                             args.ssim_weight, args.padding_mode)
+
+        loss_1_2, warped_refs_2, rigid_flows = args.simple_photometric_reconstruction_loss(tgt_img_var, ref_imgs_var,
+                                                                                     intrinsics_var, intrinsics_inv_var,
+                                                                                     depth, explainability_mask, pixel_pose,
+                                                                                     args.ssim_weight,
+                                                                                     args.padding_mode)
+
+        loss_1=loss_1+loss_1_2
 
         loss_1=loss_1.mean()
 
         if w2 > 0:
-            loss_2 = explainability_loss(explainability_mask)
+            loss_2 = args.explainability_loss(explainability_mask,(gt_depth < 0.999)).mean()
         else:
             loss_2 = 0
 
         if w3 > 0:
-            if args.nls:
-                loss_3 = args.non_local_smooth_loss(depth)
-            else:
-                loss_3 = args.smooth_loss(depth)#args.smooth_loss(depth)
+
+            loss_3 = args.smooth_loss(depth)#args.smooth_loss(depth)
 
             loss_3=loss_3.mean()
 
         else:
             loss_3=0.
 
-        loss_4 = 0
+        if w4 > 0:
+            mask = (gt_depth > 0.999).type_as(tgt_img_var)
+            loss_4 = args.pose_smooth_loss(pixel_pose,pose,mask)
+
+            loss_4=loss_4.mean()
+        else:
+            loss_4=0.
 
         loss_5 = 0
         if w5>0 and ego_flows is not None:
@@ -400,7 +415,17 @@ def train(args, train_loader, disp_net, pose_exp_net, optimizer, epoch_size,  tr
         else:
             w5=0
 
-        loss_6 = 0
+        loss_6=0
+
+        if w6>0 and args.with_gt:
+            #gt_depth=gt_depth.cuda()
+            gt_disp=1/gt_depth
+            mean_disp = gt_disp.view(b, -1).mean(-1).view(b, 1, 1, 1)
+            gt_disp = gt_disp / mean_disp
+
+            loss_6+=args.depth_loss(gt_depth,depth).mean()
+        else:
+            w6=0
 
         loss = w1*loss_1 + w2*loss_2 + w3*loss_3 + w4*loss_4 +w5*loss_5+w6*loss_6
 
@@ -414,61 +439,61 @@ def train(args, train_loader, disp_net, pose_exp_net, optimizer, epoch_size,  tr
                 train_writer.add_scalar('pose_smooth_loss', loss_4.item(), n_iter)
             if w5 > 0:
                 train_writer.add_scalar('flow_smooth_loss', loss_5.item(), n_iter)
-            if args.multi:
-                train_writer.add_scalar('consistency_loss', loss_6.item(), n_iter)
+            if w6 > 0 and args.with_gt:
+                train_writer.add_scalar('depth_loss', loss_6.item(), n_iter)
             train_writer.add_scalar('total_loss', loss.item(), n_iter)
 
         if args.training_output_freq > 0 and n_iter % args.training_output_freq == 0:
-            #print(pose.abs().view(pose.shape[0],2,6).mean(0).mean(0).data.cpu().numpy())
-            #print('p',pixel_pose[0].view(pose.shape[0],12,-1).abs().mean(0).mean(1).view(2,6).mean(0).data.cpu().numpy())
 
-            if tgt_img.shape[1]==3:
-                train_writer.add_image('train Input', tensor2array(tgt_img[0],max_value=1,colormap='bone'), n_iter)
-            else:
-                train_writer.add_image('train Input', tensor2array(tgt_img[0,0], max_value=.1, colormap='bone'), n_iter)
+            train_writer.add_image('train Input', tensor2array(tgt_img[0],max_value=1,colormap='bone'), n_iter)
 
+            if args.with_gt:
+                train_writer.add_image('train gt disp', tensor2array(gt_disp[0].cpu().data, max_value=None, colormap='bone'), n_iter)
+                train_writer.add_image('train gt depth', tensor2array(gt_depth[0].cpu().data, max_value=None), n_iter)
 
             for k,scaled_depth in enumerate(depth):
                 train_writer.add_image('train Dispnet Output Normalized {}'.format(k),tensor2array(disparities[k].data[0].cpu(), max_value=None, colormap='bone'),n_iter)
                 b, _, h, w = scaled_depth.size()
-                downscale = tgt_img_var.size(2)/h
 
-                tgt_img_scaled = nn.functional.adaptive_avg_pool2d(tgt_img_var, (h, w))
-                ref_imgs_scaled = [nn.functional.adaptive_avg_pool2d(ref_img, (h, w)) for ref_img in ref_imgs_var]
-
-                intrinsics_scaled = torch.cat((intrinsics_var[:, 0:2]/downscale, intrinsics_var[:, 2:]), dim=1)
-                intrinsics_scaled_inv = torch.cat((intrinsics_inv_var[:, :, 0:2]*downscale, intrinsics_inv_var[:, :, 2:]), dim=2)
+                warped_refs_scaled = warped_refs[k]
+                warped_refs_scaled2 = warped_refs_2[k]
 
                 # log warped images along with explainability mask
+                stacked_im = 0.
 
-                for j,ref in enumerate(ref_imgs_scaled):
-                    if explainability_mask[k] is not None:
-                        train_writer.add_image('train Exp mask Outputs {} {}'.format(k, j),
-                                               tensor2array(explainability_mask[k][0, j].data.cpu(), max_value=1,
-                                                            colormap='bone'), n_iter)
+                tgt_img_scaled = nn.functional.adaptive_avg_pool2d(tgt_img_var, (h, w))
+                middle_slice = tgt_img_scaled[0]
 
-                    if not args.simple:
+                for j in range(len(warped_refs_scaled)):
 
-                        ref_warped = inverse_warp(ref, scaled_depth[:,0], pose[:,j],
-                                                  intrinsics_scaled, intrinsics_scaled_inv,
-                                                  rotation_mode=args.rotation_mode,
-                                                  padding_mode=args.padding_mode)[0]
-                    else:
-                        current_pose = pose[:1, j]
+                    if j==0:
+                        if explainability_mask[k] is not None:
+                            train_writer.add_image('train Exp mask Outputs {}'.format(k),
+                                                   tensor2array(explainability_mask[k][0, j].data.cpu(), max_value=1,
+                                                                colormap='bone'), n_iter)
 
-                        ref_warped, _, flow = simple_inverse_warp(ref, scaled_depth[:, 0], current_pose,
-                                                                  intrinsics_scaled, intrinsics_scaled_inv,
-                                                                  padding_mode=args.padding_mode)
-                        flow = flow[0]
+                    ref_warped = warped_refs_scaled[j][0]
+                    stacked_im = stacked_im + ref_warped
 
                     if ego_flows is not None:
                         ego_flow = flow_to_image(ego_flows[k][j][0].data.cpu().numpy()).transpose(2,0,1)
-                        train_writer.add_image('ego flow {} {}'.format(k,j), ego_flow / 255, n_iter)
+                        train_writer.add_image('ego flow {} {}'.format(k, j), ego_flow / 255, n_iter)
 
-                    if ref_warped.shape[1] == 3:
-                        ref_warped = ref_warped[0]
-                        train_writer.add_image('train Warped Outputs {} {}'.format(k,j), tensor2array(ref_warped.data.cpu(),colormap='bone',max_value=1), n_iter)
-                        train_writer.add_image('train Diff Outputs {} {}'.format(k,j), tensor2array((tgt_img_scaled[0] - ref_warped).abs().data.cpu(),colormap='bone',max_value=1.), n_iter)
+                    if rigid_flows is not None:
+                        rigid_flow = flow_to_image(rigid_flows[k][j][0].data.cpu().numpy()).transpose(2, 0, 1)
+                        res_flow=flow_to_image((rigid_flows[k][j][0]-ego_flows[k][j][0]).data.cpu().numpy()).transpose(2, 0, 1)
+                        train_writer.add_image('rigid flow {} {}'.format(k, j), rigid_flow / 255, n_iter)
+                        train_writer.add_image('residual flow {} {}'.format(k, j), res_flow / 255, n_iter)
+
+                    train_writer.add_image('train Warped Outputs {} {}'.format(k, j),
+                                           tensor2array(ref_warped.data.cpu(), colormap='bone', max_value=1), n_iter)
+
+                    train_writer.add_image('train Diff Outputs {} {}'.format(k, j),
+                                           tensor2array((middle_slice - ref_warped).abs().data.cpu(), colormap='bone',
+                                                        max_value=1.), n_iter)
+
+                stacked_im[1]=0
+                train_writer.add_image('train stacked Outputs {}'.format(k), tensor2array(stacked_im.abs().data.cpu(),colormap='bone',max_value=None), n_iter)
 
 
 
@@ -515,7 +540,7 @@ def validate_without_gt(args, val_loader, disp_net, pose_exp_net, epoch, output_
     start_time = time.time()
 
     end = time.time()
-    for i, (tgt_img, ref_imgs, intrinsics, intrinsics_inv) in enumerate(val_loader):
+    for i, (tgt_img, ref_imgs, intrinsics, intrinsics_inv,gt_depth) in enumerate(val_loader):
 
         with torch.no_grad():
 
@@ -529,20 +554,14 @@ def validate_without_gt(args, val_loader, disp_net, pose_exp_net, epoch, output_
             depth = 1/disp
             explainability_mask,pose = pose_exp_net(tgt_img_var, ref_imgs_var)
 
-            if not args.simple:
-                loss_1,ego_flows = args.photometric_reconstruction_loss(tgt_img_var, ref_imgs_var,
-                                                         intrinsics_var, intrinsics_inv_var,
-                                                         depth, explainability_mask, pose,
-                                                         args.rotation_mode, args.padding_mode)
-            else:
-                loss_1,ego_flows = args.simple_photometric_reconstruction_loss(tgt_img_var, ref_imgs_var,
-                                                         intrinsics_var, intrinsics_inv_var,
-                                                         depth, explainability_mask, pose,
-                                                         args.ssim_weight,args.padding_mode)
+            loss_1,ego_flows = args.simple_photometric_reconstruction_loss(tgt_img_var, ref_imgs_var,
+                                                     intrinsics_var, intrinsics_inv_var,
+                                                     depth, explainability_mask, pose,
+                                                     args.ssim_weight,args.padding_mode)
 
             loss_1 = loss_1.mean().item()
             if w2 > 0:
-                loss_2 = explainability_loss(explainability_mask).item()
+                loss_2 = args.explainability_loss(explainability_mask).item()
             else:
                 loss_2 = 0
 
@@ -663,7 +682,8 @@ def validate_with_gt(args, val_loader, disp_net, pose_exp_net, epoch, output_wri
             intrinsics_var = intrinsics.cuda()
             intrinsics_inv_var = intrinsics_inv.cuda()
             depth = depth.cuda()
-
+            if len(depth.shape)==4:
+                depth=depth.squeeze(1)
             # compute output
             output_disp = disp_net(tgt_img_var)
             output_disp=scaling(output_disp,output_size=depth.unsqueeze(1).shape)
@@ -671,7 +691,7 @@ def validate_with_gt(args, val_loader, disp_net, pose_exp_net, epoch, output_wri
             output_depth = 1/output_disp
 
 
-            explainability_mask, pose = pose_exp_net(tgt_img_var, ref_imgs_var)
+            explainability_mask, pose,pixel_pose = pose_exp_net(tgt_img_var, ref_imgs_var)
 
 
             if log_outputs and i % log_freq == 0 and i/log_freq < len(output_writers):
@@ -692,6 +712,10 @@ def validate_with_gt(args, val_loader, disp_net, pose_exp_net, epoch, output_wri
                 output_writers[index].add_image('val Dispnet Output Normalized', tensor2array(output_disp.data[0].cpu(), max_value=None, colormap='bone'), epoch)
 
                 output_writers[index].add_image('val Depth Output', tensor2array(output_depth.data[0].cpu(), max_value=3), epoch)
+
+                if explainability_mask is not None:
+                    output_writers[index].add_image('val Exp mask Outputs',tensor2array(explainability_mask[0, 0].data.cpu(), max_value=1,colormap='bone'), epoch)
+
 
             errors_tmp=compute_errors(depth, output_depth.data)
             errors_tmp = [e.item() if isinstance(e, torch.Tensor) else e for e in errors_tmp]

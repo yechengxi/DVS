@@ -266,3 +266,111 @@ def simple_inverse_warp(img, depth, pose, intrinsics,intrinsics_inv, padding_mod
     projected_img = torch.nn.functional.grid_sample(img, new_grid, padding_mode=padding_mode)
 
     return projected_img,new_grid, flow
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+def get_multigrid(depth, pose,seq_len,intrinsics,intrinsics_inv):
+    b, h, w = depth.size()
+
+    if len(pose.shape)<=3:
+        pose=pose.view(-1,1,1,6,1)
+    else:
+        pose=pose.permute(0,2,3,1).unsqueeze(4)
+
+    i_range = torch.arange(0, h, dtype=depth.dtype, device=depth.device, requires_grad=False).view(1, h, 1).expand(1, h, w)  # [1, H, W]
+    j_range = torch.arange(0, w, dtype=depth.dtype, device=depth.device, requires_grad=False).view(1, 1, w).expand(1, h, w)  # [1, H, W]
+    ones = torch.ones(1, h, w, dtype=depth.dtype, device=depth.device, requires_grad=False)
+    pixel_coords = torch.stack((j_range, i_range, ones), dim=1)  # [1, 3, H, W]
+
+    current_pixel_coords = pixel_coords[:, :, :h, :w].expand(b, 3, h, w).contiguous().view(b, 3, -1)  # [B, 3, H*W]
+    cam_coords = intrinsics_inv.bmm(current_pixel_coords).view(b, 3, h, w)
+
+    x = cam_coords[:, 0]
+    y = cam_coords[:, 1]
+
+
+    L= depth.new_zeros(b, h, w, 2, 6, requires_grad=False)
+    L[:, :, :, 0, 0] = -1./depth
+    L[:, :, :, 0, 2] = x/depth
+    L[:, :, :, 1, 1] = -1./depth
+    L[:, :, :, 1, 2] = y/depth
+
+    L[:, :, :, 0, 3] = x * y
+    L[:, :, :, 0, 4] = - (1 + x ** 2)
+    L[:, :, :, 0, 5] = y
+    L[:, :, :, 1, 3] = (1 + y ** 2)
+    L[:, :, :, 1, 4] = -x * y
+    L[:, :, :, 1, 5] = -x
+
+    velocity=torch.matmul(L, pose).squeeze(dim=4)
+
+    #cam2pixel
+
+    new_cam_coords=torch.cat([cam_coords[:,:2]+velocity.permute(0,3,1,2),cam_coords[:,2:]],dim=1).view(b, 3, -1)
+
+    new_pixel_coords = intrinsics.bmm(new_cam_coords).view(b, 3, h, w)
+
+    new_pixel_coords=new_pixel_coords[:,:2].permute(0,2,3,1)
+
+    pixel_coords=pixel_coords[:, :2].permute(0, 2, 3, 1)
+
+    flow=(new_pixel_coords-pixel_coords)
+
+    flow=flow
+
+    grids=[]
+    flows=[]
+
+    lst = list(range(-(seq_len - 1) // 2, seq_len // 2 + 1))
+    if seq_len%2==0:
+        del lst[len(lst) // 2]
+        seq_len=seq_len+1
+    for i in lst:
+        flows.append(flow*(i/seq_len))
+        #print((flow*(i/seq_len)).mean())
+
+        new_pixel_coords=flow*(i/seq_len)+pixel_coords
+
+        grids.append(torch.stack([2*new_pixel_coords[:, :, :, 0] / (w - 1) -1., 2*new_pixel_coords[:, :, :, 1] / (h - 1) -1.], dim=3))
+
+    return grids, flows
+
+
+def multi_inverse_warp(imgs, depth, pose,intrinsics,intrinsics_inv, padding_mode='zeros'):
+    """
+    Inverse warp a source image to the target image plane.
+
+    Args:
+        img: the source image (where to sample pixels) -- [B, 3, H, W]
+        depth: depth map of the target image -- [B, H, W]
+        pose: 6DoF pose parameters from target to source -- [B, 6]
+        intrinsics: camera intrinsic matrix -- [B, 3, 3]
+        intrinsics_inv: inverse of the intrinsic matrix -- [B, 3, 3]
+    Returns:
+        Source image warped to the target image plane
+    """
+
+    grids,flows =get_multigrid(depth, pose, len(imgs), intrinsics, intrinsics_inv)
+    projected_imgs=[]
+    for i,new_grid in enumerate(grids):
+        if padding_mode == 'zeros':
+            mask=((new_grid>1)+(new_grid<-1)).detach()
+            new_grid[mask] = 2
+        projected_img = torch.nn.functional.grid_sample(imgs[i], new_grid, padding_mode=padding_mode)
+        projected_imgs.append(projected_img)
+    return projected_imgs,grids, flows
