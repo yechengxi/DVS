@@ -349,16 +349,15 @@ def train(args, train_loader, disp_net, pose_exp_net,optimizer, epoch_size,  tra
         disparities = [disp / mean_disp for disp in disparities]
 
         depth = [1/disp for disp in disparities]
-        explainability_mask, pose, pixel_pose = pose_exp_net(tgt_img_var, ref_imgs_var)
+        explainability_mask, pose, pixel_pose, final_pose = pose_exp_net(tgt_img_var, ref_imgs_var)
         ego_flows=None
         rigid_flows=None
 
 
-        if type(pose) not in [tuple, list]:
-            pose = pose[:, 0:1]
+
         loss_1,warped_refs, ego_flows = args.simple_photometric_reconstruction_loss(tgt_img_var, ref_imgs_var,
                                                              intrinsics_var, intrinsics_inv_var,
-                                                             depth, explainability_mask, pose,
+                                                             depth, explainability_mask, final_pose,
                                                              args.ssim_weight, args.padding_mode)
 
         loss_1_2, warped_refs_2, rigid_flows = args.simple_photometric_reconstruction_loss(tgt_img_var, ref_imgs_var,
@@ -558,14 +557,14 @@ def validate_with_gt(args, val_loader, disp_net, pose_exp_net, epoch, output_wri
 
             output_depth = 1/output_disp
 
-            explainability_mask, pose,pixel_pose = pose_exp_net(tgt_img_var, ref_imgs_var)
+            explainability_mask, pose,pixel_pose, final_pose = pose_exp_net(tgt_img_var, ref_imgs_var)
 
 
             loss_1, warped_refs, ego_flows = args.simple_photometric_reconstruction_loss(tgt_img_var, ref_imgs_var,
                                                                                          intrinsics_var,
                                                                                          intrinsics_inv_var,
                                                                                          output_depth, explainability_mask,
-                                                                                         pose,
+                                                                                         final_pose,
                                                                                          args.ssim_weight,
                                                                                          args.padding_mode)
 

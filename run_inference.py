@@ -132,26 +132,28 @@ def main():
             output_depth = 1 / output
 
             if args.pretrained_posenet is not None:
-                explainability_mask,pose, pixel_pose= pose_net(img, ref_imgs)#,raw_disp
+                explainability_mask,pose, pixel_pose,final_pose= pose_net(img, ref_imgs)#,raw_disp
 
-                _, ego_flow = get_new_grid(output_depth[0], pose[0,:], intrinsics, intrinsics_inv)
+                _, ego_flow = get_new_grid(output_depth[0], pose[:1,:], intrinsics, intrinsics_inv)
                 _, rigid_flow = get_new_grid(output_depth[0], pixel_pose[:1, :], intrinsics, intrinsics_inv)
+                _, final_flow = get_new_grid(output_depth[0], final_pose[:1, :], intrinsics, intrinsics_inv)
 
                 exp = (255*tensor2array(explainability_mask[0].data.cpu(), max_value=None, colormap='bone')).astype(np.uint8).transpose(1,2,0)
 
-                ego_flow=ego_flow[0].data.cpu().numpy()
+                final_flow=final_flow[0].data.cpu().numpy()
                 rigid_flow=rigid_flow[0].data.cpu().numpy()
-                res_flow =rigid_flow-ego_flow
+                ego_flow=ego_flow[0].data.cpu().numpy()
+
+
+                mask=explainability_mask[0].data.cpu().numpy().transpose((1,2,0))
+
+                write_flow(final_flow, output_dir / 'final_flow_{}{}'.format(file.namebase, '.flo'))
+                final_flow = flow_to_image(final_flow)
+                imsave(output_dir / 'final_flow_{}{}'.format(file.namebase, file.ext), final_flow)
 
                 write_flow(ego_flow,output_dir / 'ego_flow_{}{}'.format(file.namebase, '.flo'))
                 ego_flow = flow_to_image(ego_flow)
                 imsave(output_dir / 'ego_flow_{}{}'.format(file.namebase, file.ext), ego_flow)
-
-                write_flow(res_flow,output_dir / 'res_flow_{}{}'.format(file.namebase, '_res.flo'))
-                res_flow = flow_to_image(res_flow)
-                imsave(output_dir / 'res_flow_{}{}'.format(file.namebase, file.ext), res_flow)
-
-
 
             output=output[0].cpu()
             output_depth=output_depth[0,0].cpu()
@@ -161,7 +163,7 @@ def main():
                 imsave(output_dir/'disp_{}{}'.format(file.namebase,file.ext), disp)
                 np.save(output_dir/'depth_{}{}'.format(file.namebase,'.npy'),output_depth.data.numpy())
                 if args.pretrained_posenet is not None:
-                    cat_im=np.concatenate((img0,disp,ego_flow,exp,res_flow),axis=1)
+                    cat_im=np.concatenate((img0,disp,ego_flow,exp,final_flow),axis=1)
                 else:
                     cat_im=np.concatenate((img0,disp),axis=1)
                 imsave(output_dir / 'cat_{}{}'.format(file.namebase, file.ext), cat_im)

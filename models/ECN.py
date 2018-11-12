@@ -394,10 +394,10 @@ class ECN_Pose(nn.Module):
         if pixel_pose[0].shape[1]==3:
             pixel_pose=[pose.view(-1,6,1,1)+torch.cat((pixel_pose[i],torch.zeros_like(pixel_pose[i])),dim=1) for i in range(self.predicts)]
 
-        pose=[pose.view(-1,6,1,1)*(1-exps[i])+exps[i]*pixel_pose[i] for i in range(self.predicts)]
+        final_pose=[pose.view(-1,6,1,1)*(1-exps[i])+exps[i]*pixel_pose[i] for i in range(self.predicts)]
         if self.training:
-            return exps, pose,pixel_pose
+            return exps, pose,pixel_pose,final_pose
         else:
-            return exps[0], pose[0],pixel_pose[0]
+            return exps[0],pose,pixel_pose[0],final_pose[0]
 
 

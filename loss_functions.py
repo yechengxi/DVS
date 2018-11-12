@@ -172,17 +172,15 @@ class pose_smooth_loss(nn.Module):
 
         loss = 0
         weight = 0
+        pose = pose.view(-1, 6, 1, 1)
+
         for i,scaled_map in enumerate(pred_map):
             N, _, H, W = scaled_map.shape
-            if type(pose) not in [list, tuple]:
-                scaled_pose=pose.view(N,6,1,1)
-            else:
-                scaled_pose=pose[i]
 
             if H > 3 and W > 3:
                 dx, dy = gradient(scaled_map)
                 loss += (dx.abs().view(N, -1).mean(1) + dy.abs().view(N, -1).mean(1)) * H*W
-                loss += 10*(((scaled_map-scaled_pose).abs()*F.adaptive_avg_pool2d(mask,(H,W))).view(N, -1)).mean(1)
+                loss += 10*(((scaled_map-pose).abs()*F.adaptive_avg_pool2d(mask,(H,W))).view(N, -1)).mean(1)
                 weight += H*W
         return loss/weight
 
