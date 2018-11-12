@@ -73,16 +73,14 @@ parser.add_argument('--log-summary', default='progress_log_summary.csv', metavar
 parser.add_argument('--log-full', default='progress_log_full.csv', metavar='PATH',
                     help='csv where to save per-gradient descent train stats')
 parser.add_argument('--photo-loss-weight', type=float, help='weight for photometric loss', metavar='W', default=1)
-parser.add_argument('-m', '--mask-loss-weight', type=float, help='weight for explainabilty mask loss', metavar='W', default=0)
-parser.add_argument('-d', '--depth-loss-weight', type=float, help='weight for depth loss', metavar='W', default=1)
+parser.add_argument('-m', '--mask-loss-weight', type=float, help='weight for explainabilty mask loss', metavar='W', default=1)
+parser.add_argument('-d', '--depth-loss-weight', type=float, help='weight for depth loss', metavar='W', default=.1)
 parser.add_argument('--still-loss-weight', type=float, help='weight for still mask loss', metavar='W', default=0.0)
-parser.add_argument('--nls', action='store_true', help='use non-local smoothness')
 parser.add_argument('-s', '--smooth-loss-weight', type=float, help='weight for disparity smoothness loss', metavar='W', default=0.1)
-parser.add_argument('-p','--pose-loss-weight', type=float, help='weight for pose smoothness loss', metavar='W', default=0.)
+parser.add_argument('-p','--pose-loss-weight', type=float, help='weight for pose smoothness loss', metavar='W', default=1)
 parser.add_argument('-o','--flow-smooth-loss-weight', type=float, help='weight for optical flow smoothness loss', metavar='W', default=0.0)
 parser.add_argument('--ssim-weight', type=float, help='weight for ssim loss', metavar='W', default=0.)
 
-parser.add_argument('--multi', action='store_true', help='use multiple frames')
 
 parser.add_argument('--log-output', action='store_true', help='will log dispnet outputs and warped imgs at validation step')
 
@@ -106,7 +104,7 @@ parser.add_argument('--n-channel', '--init-channel', default=32, type=int,
 parser.add_argument('--growth-rate', default=32, type=int, help='feature channel growth rate.')
 parser.add_argument('--scale-factor', default=1. / 2.,
                     type=float, help='scaling factor of each layer(0.5|0.75|0.875)')
-parser.add_argument('--final-map-size', default=1, type=int, help='final map size')
+parser.add_argument('--final-map-size', default=4, type=int, help='final map size')
 
 parser.add_argument("--dataset-dir", default='.', type=str, help="Dataset directory")
 parser.add_argument("--dataset-list", default=None, type=str, help="Dataset list file")
@@ -121,7 +119,6 @@ def main():
     global best_error, n_iter
     args = parser.parse_args()
     args.with_gt=True
-
     save_path = save_path_formatter(args, parser)
     args.save_path = 'checkpoints'/save_path
     print('=> will save everything to {}'.format(args.save_path))
