@@ -332,7 +332,7 @@ def train(args, train_loader, disp_net, pose_exp_net,optimizer, epoch_size,  tra
             tgt_img, ref_imgs, intrinsics, intrinsics_inv, gt=data
             if gt.shape[1]==2:
                 gt_depth=gt[:,:1].cuda()
-                gt_mask=gt[:,1:].cuda()
+                gt_mask=torch.round(gt[:,1:].cuda())
             else:
                 gt_mask=(gt[:,:1]<0.99).cuda()
 
@@ -375,7 +375,7 @@ def train(args, train_loader, disp_net, pose_exp_net,optimizer, epoch_size,  tra
         loss_1=loss_1.mean()
 
         if w2 > 0:
-            loss_2 = args.explainability_loss(explainability_mask,(gt_mask > 0.0001)).mean()
+            loss_2 = args.explainability_loss(explainability_mask,gt_mask).mean()
         else:
             loss_2 = 0
 
@@ -389,8 +389,7 @@ def train(args, train_loader, disp_net, pose_exp_net,optimizer, epoch_size,  tra
             loss_3=0.
 
         if w4 > 0:
-            mask = (gt_mask < 0.0001).type_as(tgt_img_var)
-            loss_4 = args.pose_smooth_loss(pixel_pose,pose,mask)
+            loss_4 = args.pose_smooth_loss(pixel_pose,pose,gt_mask)
 
             loss_4=loss_4.mean()
         else:

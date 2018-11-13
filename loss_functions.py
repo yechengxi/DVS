@@ -87,6 +87,8 @@ class explainability_loss(nn.Module):
 
         if type(mask) not in [tuple, list]:
             mask = [mask]
+        gt_mask=(gt_mask>0.01).type_as(mask[0])
+
         loss = 0
         weight=0
         for mask_scaled in mask:
@@ -170,6 +172,10 @@ class pose_smooth_loss(nn.Module):
             D_dx = pred[:, :, :, 1:] - pred[:, :, :, :-1]
             return D_dx, D_dy
 
+
+        bg_mask=(mask<0.01).type_as(pose)
+        M=int(mask.max().item())
+
         if type(pred_map) not in [tuple, list]:
             pred_map = [pred_map]
 
@@ -183,11 +189,96 @@ class pose_smooth_loss(nn.Module):
             if H > 3 and W > 3:
                 dx, dy = gradient(scaled_map)
                 loss += (dx.abs().view(N, -1).mean(1) + dy.abs().view(N, -1).mean(1)) * H*W
-                loss += 10*(((scaled_map-pose).abs()*F.adaptive_avg_pool2d(mask,(H,W))).view(N, -1)).mean(1)
+                #loss += NonLocalSmoothnessLoss(scaled_map, p=1., eps=1e-6, R=0.2, B=3)*H*W
+
+                loss += 10*(((scaled_map-pose).abs()*F.adaptive_avg_pool2d(bg_mask,(H,W))).view(N, -1)).mean(1)
+
+                for j in range(1,M):
+                    obj_mask=F.adaptive_avg_pool2d((mask==j).type_as(pose),(H,W))
+                    mean_pose=(scaled_map*obj_mask).view(N, 6,-1).sum(2)/(1e-6+obj_mask.view(N, -1).sum(1).view(N,1))
+                    mean_dev=((scaled_map-mean_pose.view(N,6,1,1)).abs()*obj_mask).view(N, 6,-1).sum(2)/(1e-6+obj_mask.view(N, -1).sum(1).view(N,1))
+                    loss += 10 * mean_dev.mean() * H * W/M
                 weight += H*W
+
         return loss/weight
 
 
+
+
+
+
+
+def box_filter(tensor,R):
+    N,C,H,W=tensor.shape
+    cumsum = torch.cumsum(tensor, dim=2)
+    slidesum=torch.cat((cumsum[:, :, R:2 * R + 1, :],cumsum[:, :, 2 * R + 1:H, :] - cumsum[:, :, 0:H - 2 * R - 1, :],cumsum[:, :, -1:, :] - cumsum[:, :, H - 2 * R - 1:H - R - 1, :]),dim=2)
+    cumsum = torch.cumsum(slidesum, dim=3)
+    slidesum=torch.cat((cumsum[:, :, :, R:2 * R + 1],cumsum[:, :, :, 2 * R + 1:W] - cumsum[:, :, :, 0:W - 2 * R - 1],cumsum[:, :, :, -1:] - cumsum[:, :, :, W - 2 * R - 1:W - R - 1]),dim=3)
+    return slidesum
+
+
+
+
+def NonLocalSmoothnessLoss(I, p=1.0,eps=1e-4, R=0.1, B=10 ):
+
+    N, C, H, W = I.shape
+
+    R=int(min(H,W)*R)
+    if H<10 or W<10 or R<2:
+        return 0
+
+    loss = 0.
+
+    J=I
+
+    min_J, _ = torch.min(J.view(N, C, -1), dim=2)
+    max_J, _ = torch.max(J.view(N, C, -1), dim=2)
+    min_J = min_J.view(N, C, 1, 1, 1)
+    max_J = max_J.view(N, C, 1, 1, 1)
+    Q = torch.from_numpy(np.linspace(0.0, 1.0, B + 1)).type_as(min_J).view(1, 1, 1, 1, B + 1)
+    Q = Q * (max_J - min_J + 1e-5) + min_J
+    min_J = min_J.view(N, C, 1, 1)
+    max_J = max_J.view(N, C, 1, 1)
+    Bin1 = torch.floor((J - min_J) / (max_J - min_J + 1e-5) * B).long()
+    Bin2 = torch.ceil((J - min_J) / (max_J - min_J + 1e-5) * B).long()
+
+    I_old = I#.detach()
+
+    W1 = (torch.abs(J - Q[:, :, :, :, 0]) + eps) ** (p - 2)
+    W_sum1 = box_filter(W1, R)
+    WI_sum1 = box_filter(W1 * I_old, R)
+    WI2_sum1 = box_filter(W1 * (I_old ** 2), R)
+    loss1 = W_sum1 * (I ** 2) - 2 * I * WI_sum1 + WI2_sum1
+
+    W_sum = 0
+
+    for i in range(1, B + 1):
+
+        W2 = (torch.abs(J - Q[:, :, :, :, i]) + eps) ** (p - 2)
+        W_sum2 = box_filter(W2, R)
+        WI_sum2 = box_filter(W2 * I_old, R)
+        WI2_sum2 = box_filter(W2 * (I_old ** 2), R)
+        loss2 = W_sum2 * (I ** 2) - 2 * I * WI_sum2 + WI2_sum2
+
+        mask1 = (Bin1 == (i - 1)).float()
+        mask2 = (Bin2 == i).float()
+
+
+        slice_loss = (loss1 * (Q[:, :, :, :, i] - J) * mask1 + loss2 * (J - Q[:, :, :, :, i - 1]) * mask2) / (
+                    Q[:, :, :, :, i] - Q[:, :, :, :, i - 1])
+
+        loss = loss + slice_loss
+
+        W_sum = W_sum + (
+                    W_sum1 * (Q[:, :, :, :, i] - J) * mask1 + W_sum2 * (J - Q[:, :, :, :, i - 1]) * mask2) / (
+                            Q[:, :, :, :, i] - Q[:, :, :, :, i - 1])
+
+        W_sum1 = W_sum2
+        loss1 = loss2
+
+    loss = torch.mean((loss / W_sum).view(N,-1),1)
+
+    return loss
 
 
 
