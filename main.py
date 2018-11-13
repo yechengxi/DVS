@@ -539,12 +539,18 @@ def validate_with_gt(args, val_loader, disp_net, pose_exp_net, epoch, output_wri
     start_time = time.time()
 
     end = time.time()
-    for i, (tgt_img,ref_imgs,intrinsics,intrinsics_inv, gt_depth) in enumerate(val_loader):
+    for i, (tgt_img,ref_imgs,intrinsics,intrinsics_inv, gt) in enumerate(val_loader):
         with torch.no_grad():
             tgt_img_var = tgt_img.cuda()
             ref_imgs_var = [img.cuda() for img in ref_imgs]
             intrinsics_var = intrinsics.cuda()
             intrinsics_inv_var = intrinsics_inv.cuda()
+            if gt.shape[1]==2:
+                gt_depth=gt[:,:1].cuda()
+                gt_mask=gt[:,1:].cuda()
+            else:
+                gt_mask=(gt[:,:1]<0.99).cuda()
+
             gt_depth = gt_depth.cuda()
             if len(gt_depth.shape)==4:
                 gt_depth=gt_depth.squeeze(1)
@@ -574,7 +580,7 @@ def validate_with_gt(args, val_loader, disp_net, pose_exp_net, epoch, output_wri
             loss_1 = loss_1.mean()
 
             if w2 > 0:
-                loss_2 = args.explainability_loss(explainability_mask, (gt_depth < 0.999)).mean()
+                loss_2 = args.explainability_loss(explainability_mask, gt_mask).mean()
             else:
                 loss_2 = 0
 
