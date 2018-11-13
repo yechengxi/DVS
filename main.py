@@ -588,7 +588,7 @@ def validate_with_gt(args, val_loader, disp_net, pose_exp_net, epoch, output_wri
                 index = int(i//log_freq)
                 if epoch == 0:
                     output_writers[index].add_image('val Input', tensor2array(tgt_img[0],colormap='bone',max_value=1), 0)
-                    depth_to_show = output_depth[0].cpu()
+                    depth_to_show = gt_depth[0].cpu()
                     output_writers[index].add_image('val target Depth', tensor2array(depth_to_show, max_value=10), epoch)
                     depth_to_show[depth_to_show == 0] = 1000
                     disp_to_show = (1/depth_to_show).clamp(0,10)
