@@ -91,9 +91,11 @@ class explainability_loss(nn.Module):
         weight=0
         for mask_scaled in mask:
             N,_,H,W=mask_scaled.shape
+            if min(H,W)<4:
+                continue
             dx, dy = gradient(mask_scaled)
             loss += (dx.abs().view(N, -1).mean(1) + dy.abs().view(N, -1).mean(1)) * H * W
-            ones_var = F.adaptive_avg_pool2d(gt_mask.type_as(mask_scaled),(H,W))
+            ones_var = (F.adaptive_avg_pool2d(gt_mask.type_as(mask_scaled),(H,W))>0.01).type_as(mask_scaled)
             loss += nn.functional.binary_cross_entropy(mask_scaled, ones_var)*H*W
             weight+=H*W
         return loss/weight
@@ -106,11 +108,12 @@ class depth_loss(nn.Module):
         weight=0
         abs_rel=0.
         acc=0.
+        valid_gt = ((gt > 100 / 6000) * (gt < 7000 / 6000)).type_as(gt)
         for pred in predicts:
             N, C, H, W = pred.shape
             current_gt = F.adaptive_avg_pool2d(gt, (H, W))
             weight += H * W
-            valid = ((current_gt > 1/255) * (current_gt < 1000/255)).type_as(gt)
+            valid = (F.adaptive_avg_pool2d(valid_gt, (H, W))>0.999).type_as(gt)
             masked_gt=current_gt*valid
             masked_pred=pred*valid
             pred = pred * (torch.mean(masked_gt.view(N,-1),1) / (eps+torch.mean(masked_pred.view(N,-1),1))).view(N,1,1,1)
