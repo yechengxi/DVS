@@ -1,6 +1,7 @@
 import torch
 
 from scipy.misc import imread, imsave, imresize
+import cv2
 import numpy as np
 from path import Path
 import argparse
@@ -85,6 +86,7 @@ def main():
     intrinsics = torch.from_numpy(intrinsics).unsqueeze(0).cuda()
     intrinsics_inv = torch.from_numpy(intrinsics_inv).unsqueeze(0).cuda()
     imgs = sorted(glob.glob(os.path.join(scene ,'slices' ,'frame*.png')))
+    masks = sorted(glob.glob(os.path.join(scene, 'slices', 'mask*.png')))
 
     print('{} files to test'.format(len(imgs)))
 
@@ -104,22 +106,19 @@ def main():
         file.namebase=os.path.basename(imgs[i]).replace('.png','')
         file.ext='.jpg'
 
-        img0 = imread(imgs[i]).astype(np.float32)
-
+        img = imread(imgs[i]).astype(np.float32)
+        obj_mask = cv2.imread(masks[i], -1)
+        obj_mask=np.round(obj_mask/1000)
         ref_imgs=[]
         for j in shifts:
             ref_imgs.append(imread(imgs[i + j]).astype(np.float32))
 
-        h, w, _ = img0.shape
-
-        if (not args.no_resize) and (h != args.img_height or w != args.img_width):
-            img0 = imresize(img0, (args.img_height, args.img_width)).astype(np.float32)
-            ref_imgs=[imresize(im, (args.img_height, args.img_width)).astype(np.float32) for im in ref_imgs]
-
+        h, w, _ = img.shape
+        img0=img
 
         with torch.no_grad():
 
-            img = np.transpose(img0, (2, 0, 1))
+            img = np.transpose(img, (2, 0, 1))
             ref_imgs = [np.transpose(im, (2, 0, 1)) for im in ref_imgs]
             img = torch.from_numpy(img).unsqueeze(0)
             ref_imgs = [torch.from_numpy(im).unsqueeze(0) for im in ref_imgs]
@@ -162,6 +161,10 @@ def main():
                 disp = (255*tensor2array(output, max_value=None, colormap='bone')).astype(np.uint8).transpose(1,2,0)
                 imsave(output_dir/'disp_{}{}'.format(file.namebase,file.ext), disp)
                 np.save(output_dir/'depth_{}{}'.format(file.namebase,'.npy'),output_depth.data.numpy())
+                np.save(output_dir/'pixel_pose_{}{}'.format(file.namebase,'.npy'),pixel_pose[0].cpu().data.numpy().transpose((1,2,0)))
+                np.save(output_dir/'motion_mask_{}{}'.format(file.namebase,'.npy'),explainability_mask[0,0].cpu().data.numpy())
+                np.save(output_dir/'ego_pose_{}{}'.format(file.namebase,'.npy'),pose[0,0].cpu().data.numpy())
+
                 if args.pretrained_posenet is not None:
                     cat_im=np.concatenate((img0,disp,ego_flow,exp,final_flow),axis=1)
                 else:
