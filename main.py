@@ -413,12 +413,12 @@ def train(args, train_loader, disp_net, pose_exp_net,optimizer, epoch_size,  tra
 
         loss_6=0
 
+        gt_disp = 1 / gt_depth
+        mean_disp = gt_disp.view(b, -1).mean(-1).view(b, 1, 1, 1)
+        gt_disp = gt_disp / mean_disp
+
         if w6>0 and args.with_gt:
             #gt_depth=gt_depth.cuda()
-            gt_disp=1/gt_depth
-            mean_disp = gt_disp.view(b, -1).mean(-1).view(b, 1, 1, 1)
-            gt_disp = gt_disp / mean_disp
-
             loss_6+=args.depth_loss(gt_depth,depth).mean()
         else:
             w6=0

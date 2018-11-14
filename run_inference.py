@@ -147,9 +147,9 @@ def main():
 
                 mask=explainability_mask[0].data.cpu().numpy().transpose((1,2,0))
 
-                write_flow(final_flow, output_dir / 'final_flow_{}{}'.format(file.namebase, '.flo'))
+                #write_flow(final_flow, output_dir / 'final_flow_{}{}'.format(file.namebase, '.flo'))
                 final_flow = flow_to_image(final_flow)
-                imsave(output_dir / 'final_flow_{}{}'.format(file.namebase, file.ext), final_flow)
+                #imsave(output_dir / 'final_flow_{}{}'.format(file.namebase, file.ext), final_flow)
 
                 write_flow(ego_flow,output_dir / 'ego_flow_{}{}'.format(file.namebase, '.flo'))
                 ego_flow = flow_to_image(ego_flow)
