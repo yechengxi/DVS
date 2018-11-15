@@ -355,7 +355,7 @@ def train(args, train_loader, disp_net, pose_exp_net,optimizer, epoch_size,  tra
         disparities = [disp / mean_disp for disp in disparities]
 
         depth = [1/disp for disp in disparities]
-        if args.pixel_pose:
+        if args.pixelpose:
             explainability_mask, pose, pixel_pose, final_pose = pose_exp_net(tgt_img_var, ref_imgs_var)
         else:
             explainability_mask, pose, final_pose = pose_exp_net(tgt_img_var, ref_imgs_var)

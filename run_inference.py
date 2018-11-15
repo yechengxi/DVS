@@ -141,6 +141,7 @@ def main():
                             pixel_pose[0].cpu().data.numpy().transpose((1, 2, 0)))
                     np.save(output_dir / 'motion_mask_{}{}'.format(file.namebase, '.npy'),
                             explainability_mask[0, 0].cpu().data.numpy())
+                    exp = (255*tensor2array(explainability_mask[0].data.cpu(), max_value=None, colormap='bone')).astype(np.uint8).transpose(1,2,0)
 
                 else:
                     explainability_mask, pose, final_pose = pose_net(img, ref_imgs)
@@ -148,14 +149,12 @@ def main():
                             final_pose[0].cpu().data.numpy().transpose((1, 2, 0)))
                     np.save(output_dir / 'motion_mask_{}{}'.format(file.namebase, '.npy'),
                             explainability_mask[0].cpu().data.numpy().transpose((1,2,0)))
+                    exp = (255*tensor2array(1-explainability_mask[0,0].data.cpu(), max_value=None, colormap='bone')).astype(np.uint8).transpose(1,2,0)
 
                 _, ego_flow = get_new_grid(output_depth[0], pose[:1,:], intrinsics, intrinsics_inv)
                 _, final_flow = get_new_grid(output_depth[0], final_pose[:1, :], intrinsics, intrinsics_inv)
 
-                exp = (255*tensor2array(explainability_mask[0].data.cpu(), max_value=None, colormap='bone')).astype(np.uint8).transpose(1,2,0)
-
                 final_flow=final_flow[0].data.cpu().numpy()
-                rigid_flow=rigid_flow[0].data.cpu().numpy()
                 ego_flow=ego_flow[0].data.cpu().numpy()
 
                 write_flow(final_flow, output_dir / 'final_flow_{}{}'.format(file.namebase, '.flo'))
