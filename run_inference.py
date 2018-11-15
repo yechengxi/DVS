@@ -161,27 +161,34 @@ def main():
                 _, ego_flow = get_new_grid(output_depth[0], pose[:1,:], intrinsics, intrinsics_inv)
                 _, final_flow = get_new_grid(output_depth[0], final_pose[:1, :], intrinsics, intrinsics_inv)
 
+                residual_pose=(final_pose[0].permute(1,2,0)-pose)
+                assert residual_pose[:,:,3:].abs().max().item()<1e-4
+                residual_pose=residual_pose[:,:,:3].cpu().data.numpy()
+
+
                 final_flow=final_flow[0].data.cpu().numpy()
                 ego_flow=ego_flow[0].data.cpu().numpy()
 
                 write_flow(final_flow, output_dir / 'final_flow_{}{}'.format(file.namebase, '.flo'))
                 final_flow = flow_to_image(final_flow)
-                imsave(output_dir / 'final_flow_{}{}'.format(file.namebase, file.ext), final_flow)
+                #imsave(output_dir / 'final_flow_{}{}'.format(file.namebase, file.ext), final_flow)
 
                 write_flow(ego_flow,output_dir / 'ego_flow_{}{}'.format(file.namebase, '.flo'))
                 ego_flow = flow_to_image(ego_flow)
-                imsave(output_dir / 'ego_flow_{}{}'.format(file.namebase, file.ext), ego_flow)
+                #imsave(output_dir / 'ego_flow_{}{}'.format(file.namebase, file.ext), ego_flow)
 
             output=output[0].cpu()
             output_depth=output_depth[0,0].cpu()
 
             disp = (255*tensor2array(output, max_value=None, colormap='bone')).astype(np.uint8).transpose(1,2,0)
-            imsave(output_dir/'disp_{}{}'.format(file.namebase,file.ext), disp)
+            #imsave(output_dir/'disp_{}{}'.format(file.namebase,file.ext), disp)
             np.save(output_dir/'depth_{}{}'.format(file.namebase,'.npy'),output_depth.data.numpy())
             np.save(output_dir/'ego_pose_{}{}'.format(file.namebase,'.npy'),pose[0,0].cpu().data.numpy())
+            np.save(output_dir/'residual_3d_pose_{}{}'.format(file.namebase,'.npy'),residual_pose)
 
             if args.pretrained_posenet is not None:
-                cat_im=np.concatenate((img0,disp,ego_flow,exp,final_flow),axis=1)
+                residual_pose=residual_pose / (residual_pose.max() + 1e-6)*255
+                cat_im=np.concatenate((img0,disp,ego_flow,exp,final_flow,residual_pose),axis=1)
             else:
                 cat_im=np.concatenate((img0,disp),axis=1)
             imsave(output_dir / 'cat_{}{}'.format(file.namebase, file.ext), cat_im)
