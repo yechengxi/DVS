@@ -11,14 +11,9 @@ import sys
 sys.path.insert(0, './build/lib.linux-x86_64-3.6') #The libdvs.so should be in PYTHONPATH!
 import pydvs
 
-from multiprocessing import Pool
 import cv2
 
 global_shape = (200, 346)
-from scipy.misc import imread
-
-def load_as_float(path):
-    return imread(path).astype(np.float32)
 
 
 def get_slice(cloud, idx, ts, width, mode=1, idx_step=0.01):
@@ -158,32 +153,17 @@ class NewCloudSequenceFolder(data.Dataset):
 
 
         import time
+        t_s = time.time()
 
-        if True:
-            t_s = time.time()
+        for id in range(self.n_scenes):
+            self.scenes[id]=load_scene_s(scenes[id],self.gt)
+            if self.imgs_in_scenes[id] is not None:
+                np.linspace(0,len(self.imgs_in_scenes[id])-1,len(self.scenes[id]['index']))
+                tmp=list(np.int32(np.round(np.linspace(0, len(self.imgs_in_scenes[id]) - 1, len(self.scenes[id]['index'])))))
+                self.imgs_in_scenes[id]=[self.imgs_in_scenes[id][t] for t in tmp]
 
-            for id in range(self.n_scenes):
-                self.scenes[id]=load_scene_s(scenes[id],self.gt)
-                if self.imgs_in_scenes[id] is not None:
-                    np.linspace(0,len(self.imgs_in_scenes[id])-1,len(self.scenes[id]['index']))
-                    tmp=list(np.int32(np.round(np.linspace(0, len(self.imgs_in_scenes[id]) - 1, len(self.scenes[id]['index'])))))
-                    self.imgs_in_scenes[id]=[self.imgs_in_scenes[id][t] for t in tmp]
-
-            t_e  = time.time()
-            print('loading time:', t_e-t_s)
-
-        else:
-            from multiprocessing import Pool
-            from functools import partial
-            load_scene = partial(load_scene_s, with_gt=self.gt)
-            p = Pool(8)
-            t_s=time.time()
-            self.scenes = p.map(load_scene, scenes)
-            p.close()
-
-            t_e  = time.time()
-
-            print('loading time:', t_e-t_s)
+        t_e  = time.time()
+        print('loading time:', t_e-t_s)
 
         for id in range(self.n_scenes):
             split = int(len(self.scenes[id]['gt_ts']) * .8)
@@ -270,111 +250,6 @@ class NewCloudSequenceFolder(data.Dataset):
         else:
             return len(self.test_idx)
 
-
-
-
-class ImSequenceFolder(data.Dataset):
-
-    def __init__(self, root, train=True, sequence_length=5, train_transform=None,test_transform=None):
-        self.root = Path(root)
-        self.sequence_length=sequence_length
-        self.scenes = []
-        self.train_transform = train_transform
-        self.test_transform = test_transform
-
-        scenes=[]
-        self.imgs_in_scenes=[]
-
-        if train:
-            self.train = True
-        else:
-            self.train = False
-        for root, dirnames, filenames in os.walk(root):
-            for filename in fnmatch.filter(filenames, '*.npz'):
-                scenes.append(os.path.join(root, filename))
-                im_path=os.path.join(root,'images')
-                if os.path.exists(im_path):
-                    imgs=[]
-                    for root1, dirnames1, filenames1 in os.walk(im_path):
-                        for filename1 in fnmatch.filter(filenames1, '*.png'):
-                            imgs.append(os.path.join(root1, filename1))
-                    imgs=sorted(imgs)
-                    self.imgs_in_scenes.append(imgs)
-                else:
-                    self.imgs_in_scenes.append(None)
-
-        self.n_scenes = len(scenes)
-
-        self.scenes=[None] * self.n_scenes
-
-        self.train_idx = []
-        self.test_idx = []
-
-
-
-        for id in range(self.n_scenes):
-            scene_npz = np.load(scenes[id])
-            scene = {}
-            scene['K'] = scene_npz['K'].astype(np.float32)
-            scene['D'] = scene_npz['D'].astype(np.float32)
-            self.scenes[id]=scene
-
-        demi_length = (sequence_length - 1) // 2
-        shifts = list(range(-demi_length, demi_length + 1))
-        shifts.pop(demi_length)
-
-        for id in range(self.n_scenes):
-            sequence_set = []
-            imgs=self.imgs_in_scenes[id]
-
-            for i in range(demi_length, len(imgs)-demi_length):
-                sample = {'intrinsics': self.scenes[id]['K'], 'tgt': imgs[i], 'ref_imgs': [],'D':self.scenes[id]['D']}
-                for j in shifts:
-                    sample['ref_imgs'].append(imgs[i+j])
-                sequence_set.append(sample)
-            self.imgs_in_scenes[id]=sequence_set
-
-            split = int(len(self.imgs_in_scenes[id]) * .8)
-            tmp=[i for i in range(len(self.imgs_in_scenes[id]))]
-            self.scenes[id]['n_train']=len(tmp[:split])
-            self.scenes[id]['n_test'] = len(tmp[split:])
-
-            self.train_idx += list(zip([id for i in range(len(tmp[:split]))],tmp[:split]))
-            self.test_idx += list(zip([id for i in range(len(tmp[split:]))],tmp[split:]))
-
-
-    def __getitem__(self, index):
-        if self.train:
-            scene_id, index = self.train_idx[index]
-        else:
-            scene_id, index = self.test_idx[index]
-
-        sample=self.imgs_in_scenes[scene_id][index]
-        K=sample['intrinsics']
-        D=sample['D']
-
-        tgt_img = np.expand_dims(undistort_img(load_as_float(sample['tgt']),K,D),axis=2)
-        ref_imgs = [np.expand_dims(undistort_img(load_as_float(ref_img),K,D),axis=2) for ref_img in sample['ref_imgs']]
-
-        if  self.train:
-            self.transform=self.train_transform
-        else:
-            self.transform=self.test_transform
-
-        if self.transform is not None:
-            imgs, intrinsics = self.transform([tgt_img] +ref_imgs, np.copy(K))
-            tgt_img = imgs[0]
-            ref_imgs=imgs[1:]
-        else:
-            intrinsics = np.copy(K)
-
-        return tgt_img, ref_imgs, intrinsics, np.linalg.inv(intrinsics)
-
-    def __len__(self):
-        if self.train:
-            return len(self.train_idx)
-        else:
-            return len(self.test_idx)
 
 
 
