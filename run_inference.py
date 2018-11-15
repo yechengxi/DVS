@@ -187,7 +187,7 @@ def main():
             np.save(output_dir/'residual_3d_pose_{}{}'.format(file.namebase,'.npy'),residual_pose)
 
             if args.pretrained_posenet is not None:
-                residual_pose=residual_pose / (residual_pose.max() + 1e-6)*255
+                residual_pose=(residual_pose-residual_pose.min()) / (residual_pose.max()-residual_pose.min() + 1e-6)*255
                 cat_im=np.concatenate((img0,disp,ego_flow,exp,final_flow,residual_pose),axis=1)
             else:
                 cat_im=np.concatenate((img0,disp),axis=1)

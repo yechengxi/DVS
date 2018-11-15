@@ -10,16 +10,19 @@ CUDA_VISIBLE_DEVICES=0,1,2,3  python main.py $data_dir -m1 --batch-size 32 -f 50
 
 CUDA_VISIBLE_DEVICES=0,1,2,3 python main.py $data_dir -m1 --batch-size 32 -f 50 --lr 1e-3  -s1 -d.5 --sequence-length 5  --log-output --final-map-size 8 -p2 --epochs 50 -j 16 --pretrained-dispnet checkpoints/dispnet_checkpoint.pth.tar  >candidate2.log&
 
+CUDA_VISIBLE_DEVICES=0,1,2,3 python main.py $data_dir -m1 --batch-size 32 -f 50 --lr 1e-3  -s10 -d.0 --sequence-length 5  --log-output --final-map-size 8 -p2 --epochs 50 -j 16 --pretrained-dispnet pretrained_us/dispnet_checkpoint.pth.tar --pretrained-posenet pretrained_us/exp_pose_checkpoint.pth.tar  >unsupervised.log&
+
+
 data_dir=/vulcan/scratch/cxy/Data/DVS/lab3/
 CUDA_VISIBLE_DEVICES=0,1,2,3 python main.py $data_dir -m1 --batch-size 32 -f 50 --lr 1e-3  -s1 -d.5  --sequence-length 5  --log-output --with-gt --final-map-size 8 -p2 --epochs 50 -j 16 --pretrained-dispnet pretrained_c1/dispnet_checkpoint.pth.tar --pretrained-posenet pretrained_c1/exp_pose_checkpoint.pth.tar --pixelpose >pixelwise_finetune.log&
-CUDA_VISIBLE_DEVICES=0,1,2,3 python main.py $data_dir -m1 --batch-size 32 -f 50 --lr 1e-4  -s1 -d.5  --sequence-length 5  --log-output --with-gt --final-map-size 8 -p2 --epochs 20 -j 16 --pretrained-dispnet pretrained_c2/dispnet_checkpoint.pth.tar --pretrained-posenet pretrained_c2/exp_pose_checkpoint.pth.tar  >mask_finetune.log&
+CUDA_VISIBLE_DEVICES=0,1,2,3 python main.py $data_dir -m1 --batch-size 32 -f 50 --lr 2e-4  -s1 -d.5  --sequence-length 5  --log-output --with-gt --final-map-size 8 -p2 --epochs 10 -j 16 --pretrained-dispnet pretrained_c2/dispnet_checkpoint.pth.tar --pretrained-posenet pretrained_c2/exp_pose_checkpoint.pth.tar --lr_scheduler none >mask_finetune.log&
 
 
 
 data_dir=/home/cxy/Data/DVS/lab2/CUBE_MEDIUM_PLANE
-dispnet_dir=pretrained/pixel/dispnet_checkpoint.pth.tar
-posenet_dir=pretrained/pixel/exp_pose_checkpoint.pth.tar
-output_dir=/home/cxy/CUBE_MEDIUM_PLANE_output_pixel
+dispnet_dir=pretrained/pixel3/dispnet_checkpoint.pth.tar
+posenet_dir=pretrained/pixel3/exp_pose_checkpoint.pth.tar
+output_dir=/home/cxy/CUBE_MEDIUM_PLANE_output_pixel3
 CUDA_VISIBLE_DEVICES=0 python run_inference.py --img-height 260 --img-width 346 --final-map-size 8 --output-disp --dataset-dir $data_dir --pretrained-dispnet $dispnet_dir --pretrained-posenet $posenet_dir --sequence-length 5 --output-dir $output_dir --pixelpose
 
 cd ~
@@ -35,4 +38,27 @@ CUDA_VISIBLE_DEVICES=1 python run_inference.py --img-height 260 --img-width 346 
 cd ~
 tar -zcvf CUBE_MEDIUM_PLANE_output_mask.tar.gz CUBE_MEDIUM_PLANE_output_mask
 
+
+
+
+cd ~
+tar -zcvf CUBE_MEDIUM_PLANE_output_pixel3.tar.gz CUBE_MEDIUM_PLANE_output_pixel3
+
+
+CUDA_VISIBLE_DEVICES=0  python main.py $data_dir -m1 --batch-size 4 -f 50 --lr 1e-3  -s1  --sequence-length 3  --log-output --with-gt --final-map-size 8 -p1 --epochs 50 -d.0 >unsupervised.log&
+
+
+
+
+
+
+data_dir=/home/cxy/Data/DVS/lab3/O1O2O3_SMOOTH-001
+output_dir=/home/cxy/O1O2O3_SMOOTH-001_output_mask
+
+dispnet_dir=pretrained/mask/dispnet_checkpoint.pth.tar
+posenet_dir=pretrained/mask/exp_pose_checkpoint.pth.tar
+CUDA_VISIBLE_DEVICES=1 python run_inference.py --img-height 260 --img-width 346 --final-map-size 8 --output-disp --dataset-dir $data_dir --pretrained-dispnet $dispnet_dir --pretrained-posenet $posenet_dir --sequence-length 5 --output-dir $output_dir
+
+cd ~
+tar -zcvf CUBE_MEDIUM_PLANE_output_mask.tar.gz CUBE_MEDIUM_PLANE_output_mask
 
