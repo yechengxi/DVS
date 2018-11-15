@@ -43,6 +43,7 @@ parser.add_argument('--scale-factor', default=1. / 2.,
                     type=float, help='scaling factor of each layer(0.5|0.75|0.875)')
 parser.add_argument('--final-map-size', default=1, type=int, help='final map size')
 
+parser.add_argument("--pixelpose", action='store_true', help="use binary mask and pixel wise pose")
 
 
 def main():
@@ -133,10 +134,22 @@ def main():
             output_depth = 1 / output
 
             if args.pretrained_posenet is not None:
-                explainability_mask,pose, pixel_pose,final_pose= pose_net(img, ref_imgs)#,raw_disp
+                if args.pixelpose:
+                    explainability_mask,pose, pixel_pose,final_pose= pose_net(img, ref_imgs)#,raw_disp
+                    _, rigid_flow = get_new_grid(output_depth[0], pixel_pose[:1, :], intrinsics, intrinsics_inv)
+                    np.save(output_dir / 'pixel_pose_{}{}'.format(file.namebase, '.npy'),
+                            pixel_pose[0].cpu().data.numpy().transpose((1, 2, 0)))
+                    np.save(output_dir / 'motion_mask_{}{}'.format(file.namebase, '.npy'),
+                            explainability_mask[0, 0].cpu().data.numpy())
+
+                else:
+                    explainability_mask, pose, final_pose = pose_net(img, ref_imgs)
+                    np.save(output_dir / 'pixel_pose_{}{}'.format(file.namebase, '.npy'),
+                            final_pose[0].cpu().data.numpy().transpose((1, 2, 0)))
+                    np.save(output_dir / 'motion_mask_{}{}'.format(file.namebase, '.npy'),
+                            explainability_mask[0].cpu().data.numpy().transpose((1,2,0)))
 
                 _, ego_flow = get_new_grid(output_depth[0], pose[:1,:], intrinsics, intrinsics_inv)
-                _, rigid_flow = get_new_grid(output_depth[0], pixel_pose[:1, :], intrinsics, intrinsics_inv)
                 _, final_flow = get_new_grid(output_depth[0], final_pose[:1, :], intrinsics, intrinsics_inv)
 
                 exp = (255*tensor2array(explainability_mask[0].data.cpu(), max_value=None, colormap='bone')).astype(np.uint8).transpose(1,2,0)
@@ -145,12 +158,9 @@ def main():
                 rigid_flow=rigid_flow[0].data.cpu().numpy()
                 ego_flow=ego_flow[0].data.cpu().numpy()
 
-
-                mask=explainability_mask[0].data.cpu().numpy().transpose((1,2,0))
-
-                #write_flow(final_flow, output_dir / 'final_flow_{}{}'.format(file.namebase, '.flo'))
+                write_flow(final_flow, output_dir / 'final_flow_{}{}'.format(file.namebase, '.flo'))
                 final_flow = flow_to_image(final_flow)
-                #imsave(output_dir / 'final_flow_{}{}'.format(file.namebase, file.ext), final_flow)
+                imsave(output_dir / 'final_flow_{}{}'.format(file.namebase, file.ext), final_flow)
 
                 write_flow(ego_flow,output_dir / 'ego_flow_{}{}'.format(file.namebase, '.flo'))
                 ego_flow = flow_to_image(ego_flow)
@@ -159,19 +169,16 @@ def main():
             output=output[0].cpu()
             output_depth=output_depth[0,0].cpu()
 
-            if args.output_disp:
-                disp = (255*tensor2array(output, max_value=None, colormap='bone')).astype(np.uint8).transpose(1,2,0)
-                imsave(output_dir/'disp_{}{}'.format(file.namebase,file.ext), disp)
-                np.save(output_dir/'depth_{}{}'.format(file.namebase,'.npy'),output_depth.data.numpy())
-                np.save(output_dir/'pixel_pose_{}{}'.format(file.namebase,'.npy'),pixel_pose[0].cpu().data.numpy().transpose((1,2,0)))
-                np.save(output_dir/'motion_mask_{}{}'.format(file.namebase,'.npy'),explainability_mask[0,0].cpu().data.numpy())
-                np.save(output_dir/'ego_pose_{}{}'.format(file.namebase,'.npy'),pose[0,0].cpu().data.numpy())
+            disp = (255*tensor2array(output, max_value=None, colormap='bone')).astype(np.uint8).transpose(1,2,0)
+            imsave(output_dir/'disp_{}{}'.format(file.namebase,file.ext), disp)
+            np.save(output_dir/'depth_{}{}'.format(file.namebase,'.npy'),output_depth.data.numpy())
+            np.save(output_dir/'ego_pose_{}{}'.format(file.namebase,'.npy'),pose[0,0].cpu().data.numpy())
 
-                if args.pretrained_posenet is not None:
-                    cat_im=np.concatenate((img0,disp,ego_flow,exp,final_flow),axis=1)
-                else:
-                    cat_im=np.concatenate((img0,disp),axis=1)
-                imsave(output_dir / 'cat_{}{}'.format(file.namebase, file.ext), cat_im)
+            if args.pretrained_posenet is not None:
+                cat_im=np.concatenate((img0,disp,ego_flow,exp,final_flow),axis=1)
+            else:
+                cat_im=np.concatenate((img0,disp),axis=1)
+            imsave(output_dir / 'cat_{}{}'.format(file.namebase, file.ext), cat_im)
 
 
 if __name__ == '__main__':

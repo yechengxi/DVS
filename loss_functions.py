@@ -92,12 +92,16 @@ class explainability_loss(nn.Module):
         loss = 0
         weight=0
         for mask_scaled in mask:
-            N,_,H,W=mask_scaled.shape
+            N,C,H,W=mask_scaled.shape
             if min(H,W)<4:
                 continue
             dx, dy = gradient(mask_scaled)
             loss += (dx.abs().view(N, -1).mean(1) + dy.abs().view(N, -1).mean(1)) * H * W
-            ones_var = (F.adaptive_avg_pool2d(gt_mask.type_as(mask_scaled),(H,W))>0.01).type_as(mask_scaled)
+            if C>1:
+                mask_scaled=mask_scaled[:, :1]
+                ones_var = (F.adaptive_avg_pool2d(gt_mask.type_as(mask_scaled), (H, W)) < 0.01).type_as(mask_scaled)#background_mask
+            else:
+                ones_var = (F.adaptive_avg_pool2d(gt_mask.type_as(mask_scaled),(H,W))>0.01).type_as(mask_scaled)#foreground mask
             loss += nn.functional.binary_cross_entropy(mask_scaled, ones_var)*H*W
             weight+=H*W
         return loss/weight

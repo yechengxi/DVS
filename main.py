@@ -80,6 +80,7 @@ parser.add_argument('-s', '--smooth-loss-weight', type=float, help='weight for d
 parser.add_argument('-p','--pose-loss-weight', type=float, help='weight for pose smoothness loss', metavar='W', default=1)
 parser.add_argument('-o','--flow-smooth-loss-weight', type=float, help='weight for optical flow smoothness loss', metavar='W', default=0.0)
 parser.add_argument('--ssim-weight', type=float, help='weight for ssim loss', metavar='W', default=0.)
+parser.add_argument('--pixelpose', action='store_true', help='use binary mask and pixel wise pose.')
 
 
 parser.add_argument('--log-output', action='store_true', help='will log dispnet outputs and warped imgs at validation step')
@@ -187,15 +188,16 @@ def main():
     disp_net = models.ECN_Disp(input_size=260,#260*args.scale*.5,
                                init_planes=args.n_channel,scale_factor=args.scale_factor,growth_rate=args.growth_rate,final_map_size=args.final_map_size,norm_type=args.norm_type).cuda()
 
-    output_exp = args.mask_loss_weight > 0
-    output_exp2=args.pose_loss_weight>0
-    if not output_exp:
-        print("=> no mask loss, PoseExpnet will only output pose")
-    output_pixel_pose=args.pose_loss_weight>0
 
-    pose_exp_net = models.ECN_Pose(input_size=260,#260*args.scale*.5,
-                                   nb_ref_imgs=args.sequence_length - 1,init_planes=args.n_channel//2,scale_factor=args.scale_factor,growth_rate=args.growth_rate//2,final_map_size=args.final_map_size,
-                                      output_exp=output_exp,norm_type=args.norm_type).cuda()
+    if args.pixelpose:
+        pose_exp_net = models.ECN_PixelPose(input_size=260,#260*args.scale*.5,
+                                       nb_ref_imgs=args.sequence_length - 1,init_planes=args.n_channel//2,scale_factor=args.scale_factor,growth_rate=args.growth_rate//2,final_map_size=args.final_map_size,
+                                          norm_type=args.norm_type).cuda()
+
+    else:
+        pose_exp_net = models.ECN_Pose(input_size=260,#260*args.scale*.5,
+                                       nb_ref_imgs=args.sequence_length - 1,init_planes=args.n_channel//2,scale_factor=args.scale_factor,growth_rate=args.growth_rate//2,final_map_size=args.final_map_size,
+                                          norm_type=args.norm_type).cuda()
 
 
     if args.pretrained_posenet:
@@ -353,7 +355,11 @@ def train(args, train_loader, disp_net, pose_exp_net,optimizer, epoch_size,  tra
         disparities = [disp / mean_disp for disp in disparities]
 
         depth = [1/disp for disp in disparities]
-        explainability_mask, pose, pixel_pose, final_pose = pose_exp_net(tgt_img_var, ref_imgs_var)
+        if args.pixel_pose:
+            explainability_mask, pose, pixel_pose, final_pose = pose_exp_net(tgt_img_var, ref_imgs_var)
+        else:
+            explainability_mask, pose, final_pose = pose_exp_net(tgt_img_var, ref_imgs_var)
+
         final_flows=None
         pixel_flows=None
 
@@ -364,13 +370,14 @@ def train(args, train_loader, disp_net, pose_exp_net,optimizer, epoch_size,  tra
                                                              depth, explainability_mask, final_pose,
                                                              args.ssim_weight, args.padding_mode)
 
-        loss_1_2, warped_refs_2, pixel_flows = args.simple_photometric_reconstruction_loss(tgt_img_var, ref_imgs_var,
-                                                                                     intrinsics_var, intrinsics_inv_var,
-                                                                                     depth, explainability_mask, pixel_pose,
-                                                                                     args.ssim_weight,
-                                                                                     args.padding_mode)
+        if args.pixelpose:
+            loss_1_2, warped_refs_2, pixel_flows = args.simple_photometric_reconstruction_loss(tgt_img_var, ref_imgs_var,
+                                                                                         intrinsics_var, intrinsics_inv_var,
+                                                                                         depth, explainability_mask, pixel_pose,
+                                                                                         args.ssim_weight,
+                                                                                         args.padding_mode)
 
-        loss_1=loss_1+loss_1_2
+            loss_1=loss_1+loss_1_2
 
         loss_1=loss_1.mean()
 
@@ -389,7 +396,8 @@ def train(args, train_loader, disp_net, pose_exp_net,optimizer, epoch_size,  tra
             loss_3=0.
 
         if w4 > 0:
-            loss_4 = args.pose_smooth_loss(pixel_pose,pose,gt_mask)
+            #loss_4 = args.pose_smooth_loss(pixel_pose,pose,gt_mask)
+            loss_4 = args.pose_smooth_loss(final_pose,pose,gt_mask)
 
             loss_4=loss_4.mean()
         else:
@@ -398,7 +406,7 @@ def train(args, train_loader, disp_net, pose_exp_net,optimizer, epoch_size,  tra
         loss_5 = 0
         if w5>0 and final_flows is not None:
             stacked_final_flow=[]
-            stacked_pixel_flow=[]
+            #stacked_pixel_flow=[]
             if final_flows is not None:
                 for i in range(len(final_flows)):
                     if final_flows is not None:
@@ -406,8 +414,8 @@ def train(args, train_loader, disp_net, pose_exp_net,optimizer, epoch_size,  tra
                         stacked_final_flow.append(tmp)
             if len(stacked_final_flow)>0:
                 loss_5+=args.smooth_loss(stacked_final_flow).mean()
-            if len(stacked_pixel_flow) > 0:
-                loss_5 += args.smooth_loss(stacked_pixel_flow).mean()
+            #if len(stacked_pixel_flow) > 0:
+            #    loss_5 += args.smooth_loss(stacked_pixel_flow).mean()
         else:
             w5=0
 
@@ -452,7 +460,6 @@ def train(args, train_loader, disp_net, pose_exp_net,optimizer, epoch_size,  tra
                 b, _, h, w = scaled_depth.size()
 
                 warped_refs_scaled = warped_refs[k]
-                warped_refs_scaled2 = warped_refs_2[k]
 
                 # log warped images along with explainability mask
                 stacked_im = 0.
@@ -464,8 +471,12 @@ def train(args, train_loader, disp_net, pose_exp_net,optimizer, epoch_size,  tra
 
                     if j==0:
                         if explainability_mask[k] is not None:
+                            if args.pixelpose:
+                                mask=explainability_mask[k][0, 0].data.cpu()
+                            else:
+                                mask=1-explainability_mask[k][0, 0].data.cpu()
                             train_writer.add_image('train Exp mask Outputs {}'.format(k),
-                                                   tensor2array(explainability_mask[k][0, j].data.cpu(), max_value=1,
+                                                   tensor2array(mask, max_value=1,
                                                                 colormap='bone'), n_iter)
 
                     ref_warped = warped_refs_scaled[j][0]
@@ -564,8 +575,10 @@ def validate_with_gt(args, val_loader, disp_net, pose_exp_net, epoch, output_wri
 
             output_depth = 1/output_disp
 
-            explainability_mask, pose,pixel_pose, final_pose = pose_exp_net(tgt_img_var, ref_imgs_var)
-
+            if args.pixelpose:
+                explainability_mask, pose,pixel_pose, final_pose = pose_exp_net(tgt_img_var, ref_imgs_var)
+            else:
+                explainability_mask, pose, final_pose = pose_exp_net(tgt_img_var, ref_imgs_var)
 
             loss_1, warped_refs, final_flows = args.simple_photometric_reconstruction_loss(tgt_img_var, ref_imgs_var,
                                                                                          intrinsics_var,
