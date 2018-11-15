@@ -61,10 +61,17 @@ def main():
 
     if args.pretrained_posenet:
 
-        pose_net = models.ECN_Pose(input_size=args.img_height, nb_ref_imgs=args.sequence_length - 1,
+        if args.pixelpose:
+            pose_net = models.ECN_PixelPose(input_size=args.img_height, nb_ref_imgs=args.sequence_length - 1,
                                        init_planes=args.n_channel // 2, scale_factor=args.scale_factor,
                                        growth_rate=args.growth_rate // 2, final_map_size=args.final_map_size,
                                        norm_type=args.norm_type).cuda()
+
+        else:
+            pose_net = models.ECN_Pose(input_size=args.img_height, nb_ref_imgs=args.sequence_length - 1,
+                                           init_planes=args.n_channel // 2, scale_factor=args.scale_factor,
+                                           growth_rate=args.growth_rate // 2, final_map_size=args.final_map_size,
+                                           norm_type=args.norm_type).cuda()
 
         weights = torch.load(args.pretrained_posenet)
         pose_net.load_state_dict(weights['state_dict'])
