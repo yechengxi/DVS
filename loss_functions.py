@@ -197,7 +197,7 @@ class pose_smooth_loss(nn.Module):
                     obj_mask=F.adaptive_avg_pool2d((mask==j).type_as(pose),(H,W))
                     mean_pose=(scaled_map*obj_mask).view(N, 6,-1).sum(2)/(1e-6+obj_mask.view(N, -1).sum(1).view(N,1))
                     mean_dev=((scaled_map-mean_pose.view(N,6,1,1)).abs()*obj_mask).view(N, 6,-1).sum(2)/(1e-6+obj_mask.view(N, -1).sum(1).view(N,1))
-                    loss += 10 * mean_dev.mean() * H * W/M
+                    loss += 100 * mean_dev.mean() * H * W/M
                 weight += H*W
 
         return loss/weight

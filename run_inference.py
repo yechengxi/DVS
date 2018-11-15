@@ -101,7 +101,8 @@ def main():
     shifts.pop(demi_length)
 
     #for i in range(demi_length,len(imgs)-demi_length):
-    for i in range(round(len(imgs)*.9), len(imgs) - demi_length):
+    #for i in range(round(len(imgs)*.9), len(imgs) - demi_length):
+    for i in range(demi_length, round(len(imgs)*0.1 - demi_length)):
 
         file =File()
         file.namebase=os.path.basename(imgs[i]).replace('.png','')
