@@ -391,7 +391,7 @@ class ECN_Pose(nn.Module):
         exps = [torch.sigmoid(predicts[i][:, :1]) for i in range(self.predicts)]
 
         res_pose = [0.001 * predicts[i][:, 1:] for i in range(self.predicts)]
-        
+
         for i in range(self.predicts):
             res_pose[i][:,3:]=0.
 
