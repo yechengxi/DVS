@@ -391,10 +391,11 @@ class ECN_Pose(nn.Module):
         exps = [torch.sigmoid(predicts[i][:, :1]) for i in range(self.predicts)]
 
         res_pose = [0.001 * predicts[i][:, 1:] for i in range(self.predicts)]
-        if res_pose[0].shape[1]==3:
-            pixel_pose=[pose.view(-1,6,1,1)+torch.cat((res_pose[i],torch.zeros_like(res_pose[i])),dim=1) for i in range(self.predicts)]
-        else:
-            pixel_pose=[pose.view(-1,6,1,1)+res_pose[i] for i in range(self.predicts)]
+        
+        for i in range(self.predicts):
+            res_pose[i][:,3:]=0.
+
+        pixel_pose=[pose.view(-1,6,1,1)+res_pose[i] for i in range(self.predicts)]
 
         final_pose=[pose.view(-1,6,1,1)*(1-exps[i])+exps[i]*pixel_pose[i] for i in range(self.predicts)]
         if self.training:
