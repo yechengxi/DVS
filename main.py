@@ -396,7 +396,7 @@ def train(args, train_loader, disp_net, pose_exp_net,optimizer, epoch_size,  tra
 
             loss_1_slices,warped_slices,ego_flows_slices = args.sharpness_loss(slices,
                                                     intrinsics_var, intrinsics_inv_var,
-                                                    depth, explainability_mask, pose,
+                                                    depth, explainability_mask, final_pose,
                                                     args.padding_mode)
             loss_1=loss_1+loss_1_slices
 
