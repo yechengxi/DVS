@@ -184,14 +184,15 @@ class CloudSequenceFolder(data.Dataset):
 
             split = int(len(imgs) * .8)
             if self.train:
-                imgs = imgs[:split]
-                depths = depths[:split]
-                masks = masks[:split]
                 if self.slices>0:
+                    print('raw data:', id, len(self.raw_data[id]['gt_ts']), len(imgs))
                     tmp = [i for i in range(len(self.raw_data[id]['gt_ts']))]
                     self.raw_data[id]['n_train'] = len(tmp[:split])
                     self.train_idx += list(zip([id for i in range(len(tmp[:split]))], tmp[:split]))
-                    print('raw data:', id, len(self.raw_data[id]['gt_ts']), len(imgs))
+
+                imgs = imgs[:split]
+                depths = depths[:split]
+                masks = masks[:split]
 
             else:
                 imgs = imgs[split:]
