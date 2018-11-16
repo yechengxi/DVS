@@ -152,13 +152,14 @@ class CloudSequenceFolder(data.Dataset):
 
     def crawl_folders(self, sequence_length):
 
-        import time
-        t_s = time.time()
-        self.raw_data = [os.path.join(scene, 'recording.npz') for scene in self.scenes]
-        for id in range(self.n_scenes):
-            self.raw_data[id] = load_scene_s(self.raw_data[id])
+        if self.slices>0 and self.train:
+            import time
+            t_s = time.time()
+            self.raw_data = [os.path.join(scene, 'recording.npz') for scene in self.scenes]
+            for id in range(self.n_scenes):
+                self.raw_data[id] = load_scene_s(self.raw_data[id])
 
-        self.train_idx = []
+            self.train_idx = []
 
 
 
@@ -181,17 +182,16 @@ class CloudSequenceFolder(data.Dataset):
             masks = sorted(glob.glob(os.path.join(scene, 'slices', 'mask*.png')))
 
 
-            #assert(len(self.raw_data[id]['gt_ts'])==len(imgs))
-
             split = int(len(imgs) * .8)
             if self.train:
                 imgs = imgs[:split]
                 depths = depths[:split]
                 masks = masks[:split]
-
-                tmp = [i for i in range(len(self.raw_data[id]['gt_ts']))]
-                self.raw_data[id]['n_train'] = len(tmp[:split])
-                self.train_idx += list(zip([id for i in range(len(tmp[:split]))], tmp[:split]))
+                if self.slices>0:
+                    tmp = [i for i in range(len(self.raw_data[id]['gt_ts']))]
+                    self.raw_data[id]['n_train'] = len(tmp[:split])
+                    self.train_idx += list(zip([id for i in range(len(tmp[:split]))], tmp[:split]))
+                    print('raw data:', id, len(self.raw_data[id]['gt_ts'], len(imgs)))
 
             else:
                 imgs = imgs[split:]
@@ -206,7 +206,7 @@ class CloudSequenceFolder(data.Dataset):
 
             for i in range(demi_length, len(imgs) - demi_length):
                 sample = {'intrinsics': intrinsics, 'tgt': imgs[i], 'ref_imgs': [], 'depth': self.depths[i],'D':distortion,'mask':self.masks[i]}
-                if self.train:
+                if self.train and self.slices>0:
                     sample['cloud_idx']=self.train_idx[i]
                 for j in shifts:
                     sample['ref_imgs'].append(imgs[i + j])
@@ -222,23 +222,24 @@ class CloudSequenceFolder(data.Dataset):
 
         slices = []
         if self.train:
-            scene_id, index = sample['cloud_idx']
-            gt_ts=self.raw_data[scene_id]['gt_ts'][index]
+            if self.slices>0:
+                scene_id, index = sample['cloud_idx']
+                gt_ts=self.raw_data[scene_id]['gt_ts'][index]
 
-            cloud = self.raw_data[scene_id]['events']
-            cloud_idx =self.raw_data[scene_id]['index']
-            sl, idx = get_slice(cloud, cloud_idx, gt_ts, 0.25, 1, self.raw_data[scene_id]['discretization'])
+                cloud = self.raw_data[scene_id]['events']
+                cloud_idx =self.raw_data[scene_id]['index']
+                sl, idx = get_slice(cloud, cloud_idx, gt_ts, 0.25, 1, self.raw_data[scene_id]['discretization'])
 
-            n_slice = len(idx)
-            idx = list(idx) + [len(sl)]
+                n_slice = len(idx)
+                idx = list(idx) + [len(sl)]
 
-            if self.train and (self.slices>0):
-                T = int(n_slice / self.slices)
-                # store slices
-                for i in range(self.slices):
-                    mini_slice = sl[idx[i*T]:idx[(i + 1)*T]]
-                    cmb = dvs_img(mini_slice, global_shape,  self.raw_data[scene_id]['K'], self.raw_data[scene_id]['D'])
-                    slices.append(cmb)
+                if self.train and (self.slices>0):
+                    T = int(n_slice / self.slices)
+                    # store slices
+                    for i in range(self.slices):
+                        mini_slice = sl[idx[i*T]:idx[(i + 1)*T]]
+                        cmb = dvs_img(mini_slice, global_shape,  self.raw_data[scene_id]['K'], self.raw_data[scene_id]['D'])
+                        slices.append(cmb)
 
 
 
