@@ -31,6 +31,7 @@ parser = argparse.ArgumentParser(description='Structure from Motion Learner',
 parser.add_argument('data', metavar='DIR',
                     help='path to dataset')
 parser.add_argument('--sequence-length', type=int, metavar='N', help='sequence length for training', default=3)
+parser.add_argument('--slices', type=int, metavar='N', help='slice length for training', default=0)
 parser.add_argument('--rotation-mode', type=str, choices=['euler', 'quat'], default='euler',
                     help='rotation mode for PoseExpnet : euler (yaw,pitch,roll) or quaternion (last 3 coefficients)')
 parser.add_argument('--padding-mode', type=str, choices=['zeros', 'border'], default='zeros',
@@ -87,6 +88,8 @@ parser.add_argument('--log-output', action='store_true', help='will log dispnet 
 
 parser.add_argument('-f', '--training-output-freq', type=int, help='frequence for outputting dispnet outputs and warped imgs at training for all scales if 0 will not output',
                     metavar='N', default=0)
+parser.add_argument('--sharp', action='store_true',help='use sharpness loss')
+
 parser.add_argument('--simple', action='store_true',help='use simple warping')
 
 #optimizer
@@ -149,17 +152,18 @@ def main():
                                                 ])
 
     print("=> fetching scenes in '{}'".format(args.data))
-    train_set = LabSequenceFolder2(
+    train_set = CloudSequenceFolder(
         args.data,
         transform=train_transform,
         seed=args.seed,
         train=True,
         sequence_length=args.sequence_length,
+        slices=args.slices,
         scale=args.scale
     )
 
     # if no Groundtruth is avalaible, Validation set is the same type as training set to measure photometric loss from warping
-    val_set = LabSequenceFolder2(
+    val_set = CloudSequenceFolder(
         args.data,
         transform=valid_transform,
         seed=args.seed,
@@ -219,6 +223,9 @@ def main():
     cudnn.benchmark = True
     disp_net = torch.nn.DataParallel(disp_net)
     pose_exp_net = torch.nn.DataParallel(pose_exp_net)
+
+    args.sharpness_loss=sharpness_loss().cuda()
+    args.sharpness_loss=torch.nn.DataParallel(args.sharpness_loss)
 
     args.simple_photometric_reconstruction_loss = simple_photometric_reconstruction_loss().cuda()
     args.simple_photometric_reconstruction_loss = torch.nn.DataParallel(args.simple_photometric_reconstruction_loss)
@@ -330,8 +337,13 @@ def train(args, train_loader, disp_net, pose_exp_net,optimizer, epoch_size,  tra
     for i, data in enumerate(train_loader):
         if len(data)==4:
             tgt_img, ref_imgs, intrinsics, intrinsics_inv=data
-        if len(data)==5:
-            tgt_img, ref_imgs, intrinsics, intrinsics_inv, gt=data
+        if len(data)>=5:
+            if len(data) == 5:
+                tgt_img, ref_imgs, intrinsics, intrinsics_inv, gt=data
+            if len(data) == 6:
+                tgt_img, ref_imgs, intrinsics, intrinsics_inv, gt,slices = data
+                if args.sharp:
+                    slices = [img.cuda() for img in slices]
             if gt.shape[1]==2:
                 gt_depth=gt[:,:1].cuda()
                 gt_mask=torch.round(gt[:,1:].cuda())
@@ -378,6 +390,15 @@ def train(args, train_loader, disp_net, pose_exp_net,optimizer, epoch_size,  tra
                                                                                          args.padding_mode)
 
             loss_1=loss_1+loss_1_2
+
+
+        if args.sharp:
+
+            loss_1_slices,warped_slices,ego_flows_slices = args.sharpness_loss(slices,
+                                                    intrinsics_var, intrinsics_inv_var,
+                                                    depth, explainability_mask, pose,
+                                                    args.padding_mode)
+            loss_1=loss_1+loss_1_slices
 
         loss_1=loss_1.mean()
 
@@ -454,6 +475,11 @@ def train(args, train_loader, disp_net, pose_exp_net,optimizer, epoch_size,  tra
             if args.with_gt:
                 train_writer.add_image('train gt disp', tensor2array(gt_disp[0].cpu().data, max_value=None, colormap='bone'), n_iter)
                 train_writer.add_image('train gt depth', tensor2array(gt_depth[0].cpu().data, max_value=None), n_iter)
+
+            if args.sharp:
+                for j in range(len(warped_slices[0])):
+                    if j == 0 or j == len(warped_slices[0]) - 1 or j == ((len(warped_slices[0]) - 1) // 2):
+                        train_writer.add_image('warped slice {}'.format(j), tensor2array(warped_slices[0][j][0].data.cpu(), max_value=1, colormap='bone'),n_iter)
 
             for k,scaled_depth in enumerate(depth):
                 train_writer.add_image('train Dispnet Output Normalized {}'.format(k),tensor2array(disparities[k].data[0].cpu(), max_value=None, colormap='bone'),n_iter)
@@ -548,7 +574,7 @@ def validate_with_gt(args, val_loader, disp_net, pose_exp_net, epoch, output_wri
     start_time = time.time()
 
     end = time.time()
-    for i, (tgt_img,ref_imgs,intrinsics,intrinsics_inv, gt) in enumerate(val_loader):
+    for i, (tgt_img,ref_imgs,intrinsics,intrinsics_inv, gt,slices) in enumerate(val_loader):
         with torch.no_grad():
             tgt_img_var = tgt_img.cuda()
             ref_imgs_var = [img.cuda() for img in ref_imgs]

@@ -75,6 +75,66 @@ class simple_photometric_reconstruction_loss(nn.Module):
 
 
 
+class sharpness_loss(nn.Module):
+    def __init__(self):
+        super(sharpness_loss, self).__init__()
+
+    def forward(self, ref_imgs, intrinsics, intrinsics_inv, depth, explainability_mask, pose, padding_mode='zeros'):
+        def one_scale(depth,explainability_mask,pose):
+
+            sharpness_loss = 0
+            b, _, h, w = depth.size()
+            downscale = ref_imgs[0].size(2)/h
+            ego_flows_scaled=[]
+            ref_imgs_scaled = [nn.functional.adaptive_avg_pool2d(ref_img, (h, w)) for ref_img in ref_imgs]
+            intrinsics_scaled = torch.cat((intrinsics[:, 0:2]/downscale, intrinsics[:, 2:]), dim=1)
+            intrinsics_scaled_inv = torch.cat((intrinsics_inv[:, :, 0:2]*downscale, intrinsics_inv[:, :, 2:]), dim=2)
+
+            stacked_im=0.
+
+            ref_imgs_warped, grids, ego_flows_scaled = multi_inverse_warp(ref_imgs_scaled, depth[:, 0], pose, intrinsics_scaled,
+                                                              intrinsics_scaled_inv, padding_mode)
+            for i in range(len(ref_imgs)):
+                ref_img=ref_imgs_scaled[i]
+                ref_img_warped=ref_imgs_warped[i]
+                new_grid=grids[i]
+                in_bound = (new_grid[:,:,:,0]!=2).type_as(ref_img_warped).unsqueeze(1)
+                #print(ref_img.min(),ref_img.mean(),ref_img.max(),ref_img_warped.min(),ref_img_warped.mean(),ref_img_warped.max())
+                scaling = ref_img.view(b, 3, -1).mean(-1) / (1e-5 + ref_img_warped.view(b, 3, -1).mean(-1))
+                #print(scaling.view(1,-1))
+                stacked_im = stacked_im + ref_img_warped #* in_bound* scaling.view(b, 3, 1, 1)
+            stacked_im=torch.pow(stacked_im.abs()+1e-4, .5)
+            #if explainability_mask is not None:
+            #    stacked_im = stacked_im * explainability_mask[:, 0:1]
+            stacked_im=stacked_im[:,0]+stacked_im[:,2]#take the event channels
+            sharpness_loss += stacked_im.view(b, -1).mean(1)
+
+            return sharpness_loss,ref_imgs_warped,ego_flows_scaled
+
+        if type(explainability_mask) not in [tuple, list]:
+            explainability_mask = [explainability_mask]
+        if type(depth) not in [list, tuple]:
+            depth = [depth]
+        if type(pose) in [tuple, list]:
+            assert len(pose)==len(depth)
+        else:
+            pose=[pose for i in range(len(depth))]
+        loss = 0
+        ego_flows=[]
+        warped_refs=[]
+        weight=0
+
+        for d, mask, p in zip(depth, explainability_mask,pose):
+            current_loss,ref_imgs_warped,ego_flows_scaled= one_scale(d, mask,p)
+            _, _, h, w = d.size()
+            weight += h * w
+            loss = loss + current_loss * h * w
+            ego_flows.append(ego_flows_scaled)
+            warped_refs.append(ref_imgs_warped)
+
+        loss = loss / weight
+        return loss,warped_refs,ego_flows
+
 
 class explainability_loss(nn.Module):
     def __init__(self):
