@@ -15,8 +15,7 @@ from flowlib import *
 parser = argparse.ArgumentParser(description='Inference script for DispNet learned with \
                                  Structure from Motion Learner inference on KITTI and CityScapes Dataset',
                                  formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-parser.add_argument("--output-disp", action='store_true', help="save disparity img")
-parser.add_argument("--output-depth", action='store_true', help="save depth img")
+
 #parser.add_argument("--pretrained", required=True, type=str, help="pretrained DispNet path")
 parser.add_argument("--pretrained-dispnet", required=True, type=str, help="pretrained DispNet path")
 parser.add_argument("--pretrained-posenet", default=None, type=str, help="pretrained PoseNet path")
@@ -48,9 +47,6 @@ parser.add_argument("--pixelpose", action='store_true', help="use binary mask an
 
 def main():
     args = parser.parse_args()
-    if not(args.output_disp or args.output_depth):
-        print('You must at least output one value !')
-        return
 
 
     disp_net = models.ECN_Disp(input_size=args.img_height,init_planes=args.n_channel,scale_factor=args.scale_factor,growth_rate=args.growth_rate,final_map_size=args.final_map_size,norm_type=args.norm_type).cuda()
