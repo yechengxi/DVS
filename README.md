@@ -81,4 +81,4 @@ CUDA_VISIBLE_DEVICES=0 python main.py $data_dir -m1 --batch-size 32 -f 50 --lr 1
 
 
 data_dir=/vulcan/scratch/cxy/Data/DVS/lab3/
-CUDA_VISIBLE_DEVICES=0,1,2,3 python main.py $data_dir -m1 --batch-size 16 -f 50 --lr 1e-4 -s1 -d.5  --sequence-length 5 --slices 25  --log-output --with-gt --final-map-size 8 -p2 --epochs 50 -j 16 --pretrained-dispnet pretrained_c1/dispnet_checkpoint.pth.tar --pretrained-posenet pretrained_c1/exp_pose_checkpoint.pth.tar --pixelpose --sharp >pixelwise_cloud.log&
+CUDA_VISIBLE_DEVICES=0,1,2,3 python main.py $data_dir -m1 --batch-size 32 -f 50 --lr 1e-4 -s1 -d.5  --sequence-length 5 --slices 25  --log-output --with-gt --final-map-size 8 -p2 --epochs 50 -j 16 --pretrained-dispnet pretrained_c2/dispnet_checkpoint.pth.tar --pretrained-posenet pretrained_c2/exp_pose_checkpoint.pth.tar --sharp >mask_cloud.log&

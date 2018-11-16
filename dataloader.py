@@ -191,7 +191,7 @@ class CloudSequenceFolder(data.Dataset):
                     tmp = [i for i in range(len(self.raw_data[id]['gt_ts']))]
                     self.raw_data[id]['n_train'] = len(tmp[:split])
                     self.train_idx += list(zip([id for i in range(len(tmp[:split]))], tmp[:split]))
-                    print('raw data:', id, len(self.raw_data[id]['gt_ts'], len(imgs)))
+                    print('raw data:', id, len(self.raw_data[id]['gt_ts']), len(imgs))
 
             else:
                 imgs = imgs[split:]
