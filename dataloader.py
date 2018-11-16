@@ -181,7 +181,7 @@ class CloudSequenceFolder(data.Dataset):
             masks = sorted(glob.glob(os.path.join(scene, 'slices', 'mask*.png')))
 
 
-            assert(len(self.raw_data[id]['gt_ts'])==len(imgs))
+            #assert(len(self.raw_data[id]['gt_ts'])==len(imgs))
 
             split = int(len(imgs) * .8)
             if self.train:
