@@ -158,7 +158,7 @@ class explainability_loss(nn.Module):
             dx, dy = gradient(mask_scaled)
             loss += (dx.abs().view(N, -1).mean(1) + dy.abs().view(N, -1).mean(1)) * H * W
             if C>1:
-                loss += .1*torch.pow(mask_scaled,.5).view(N, -1).mean(1) * H * W *C#check this!
+                #loss += .1*torch.pow(mask_scaled,.5).view(N, -1).mean(1) * H * W *C#check this!
                 #m=((mask_scaled<0.8)*(mask_scaled>0.2)).sum().item()
                 #print(m/N/C/H/W)
                 mask_scaled=mask_scaled[:, :1]

@@ -16,7 +16,7 @@ CUDA_VISIBLE_DEVICES=0,1 python main.py $data_dir -m1 --batch-size 16 -f 50 --lr
 
 data_dir=/vulcan/scratch/cxy/Data/DVS/lab3/
 CUDA_VISIBLE_DEVICES=0,1,2,3 python main.py $data_dir -m1 --batch-size 32 -f 50 --lr 1e-3  -s1 -d.5  --sequence-length 5  --log-output --with-gt --final-map-size 8 -p2 --epochs 50 -j 16 --pretrained-dispnet pretrained_c1/dispnet_checkpoint.pth.tar --pretrained-posenet pretrained_c1/exp_pose_checkpoint.pth.tar --pixelpose >pixelwise_finetune.log&
-CUDA_VISIBLE_DEVICES=0,1,2,3 python main.py $data_dir -m1 --batch-size 32 -f 50 --lr 2e-4  -s1 -d.5  --sequence-length 5  --log-output --with-gt --final-map-size 8 -p2 --epochs 10 -j 16 --pretrained-dispnet pretrained_c2/dispnet_checkpoint.pth.tar --pretrained-posenet pretrained_c2/exp_pose_checkpoint.pth.tar --lr_scheduler none >mask_finetune.log&
+CUDA_VISIBLE_DEVICES=0,1,2,3 python main.py $data_dir -m1 --batch-size 32 -f 50 --lr 2e-4  -s1 -d.5  --sequence-length 5  --log-output --with-gt --final-map-size 8 -p2 --epochs 10 -j 16 --pretrained-dispnet pretrained_c2/dispnet_checkpoint.pth.tar --pretrained-posenet pretrained_c2/exp_pose_checkpoint.pth.tar --lr-scheduler none >mask_finetune.log&
 
 
 
@@ -68,7 +68,7 @@ tar -zcvf CUBE_MEDIUM_PLANE_output_mask.tar.gz CUBE_MEDIUM_PLANE_output_mask
 
 data_dir=/vulcan/scratch/cxy/Data/DVS/lab3/
 CUDA_VISIBLE_DEVICES=0,1,2,3 python main.py $data_dir -m1 --batch-size 32 -f 50 --lr 1e-3  -s1 -d.5  --sequence-length 5  --log-output --with-gt --final-map-size 8 -p2 --epochs 50 -j 16 --pretrained-dispnet pretrained_c1/dispnet_checkpoint.pth.tar --pretrained-posenet pretrained_c1/exp_pose_checkpoint.pth.tar --pixelpose >pixelwise_finetune.log&
-CUDA_VISIBLE_DEVICES=0,1,2,3 python main.py $data_dir -m1 --batch-size 32 -f 50 --lr 2e-4  -s1 -d.5  --sequence-length 5  --log-output --with-gt --final-map-size 8 -p2 --epochs 10 -j 16 --pretrained-dispnet pretrained_c2/dispnet_checkpoint.pth.tar --pretrained-posenet pretrained_c2/exp_pose_checkpoint.pth.tar --lr_scheduler none >mask_finetune.log&
+CUDA_VISIBLE_DEVICES=0,1,2,3 python main.py $data_dir -m1 --batch-size 32 -f 50 --lr 2e-4  -s1 -d.5  --sequence-length 5  --log-output --with-gt --final-map-size 8 -p2 --epochs 10 -j 16 --pretrained-dispnet pretrained_c2/dispnet_checkpoint.pth.tar --pretrained-posenet pretrained_c2/exp_pose_checkpoint.pth.tar --lr-scheduler none >mask_finetune.log&
 
 
 
@@ -96,3 +96,7 @@ CUDA_VISIBLE_DEVICES=0,1  python main.py $data_dir -m1 --batch-size 32 -f 50 --l
 CUDA_VISIBLE_DEVICES=2,3  python main.py $data_dir -m1 --batch-size 32 -f 50 --lr 1e-3  -s1.01  --sequence-length 5  --log-output --with-gt --final-map-size 4 -p1 --epochs 20 --scale-factor 0.5 --n-channel 4 --growth-rate 4 -j 16 --norm-type fd >small_deeper.log&
 
 CUDA_VISIBLE_DEVICES=0,1  python main.py $data_dir -m1 --batch-size 32 -f 50 --lr 1e-3  -s1.001  --sequence-length 5  --log-output --with-gt --final-map-size 4 -p1 --epochs 20 --scale-factor 0.4 --n-channel 4 --growth-rate 4 -j 16 --norm-type fd >small_deeper2.log&
+
+
+
+CUDA_VISIBLE_DEVICES=0,1,2,3 python main.py $data_dir -m1 --batch-size 32 -f 50 --lr 2e-4  -s1 -d.5  --sequence-length 5  --log-output --with-gt --final-map-size 8 -p2 --epochs 20 -j 16 --pretrained-dispnet pretrained_c2/dispnet_checkpoint.pth.tar --pretrained-posenet pretrained_c2/exp_pose_checkpoint.pth.tar --lr-scheduler none --norm-type fd >mask_finetune_fd.log&
