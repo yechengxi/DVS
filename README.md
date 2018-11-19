@@ -100,3 +100,12 @@ CUDA_VISIBLE_DEVICES=0,1  python main.py $data_dir -m1 --batch-size 32 -f 50 --l
 
 
 CUDA_VISIBLE_DEVICES=0,1,2,3 python main.py $data_dir -m1 --batch-size 32 -f 50 --lr 2e-4  -s1 -d.5  --sequence-length 5  --log-output --with-gt --final-map-size 8 -p2 --epochs 20 -j 16 --pretrained-dispnet pretrained_c2/dispnet_checkpoint.pth.tar --pretrained-posenet pretrained_c2/exp_pose_checkpoint.pth.tar --lr-scheduler none --norm-type fd >mask_finetune_fd.log&
+
+
+
+
+
+
+CUDA_VISIBLE_DEVICES=0,1,2,3 python main.py $data_dir -m1 --batch-size 32 -f 50 --lr 1e-3  -s1 -d.5 --sequence-length 5  --log-output --final-map-size 8 -p2 --epochs 100 -j 16 >mask_model.log&
+
+CUDA_VISIBLE_DEVICES=4,5,6,7 python main.py $data_dir -m1 --batch-size 32 -f 50 --lr 2e-4  -s1 -d.5 --sequence-length 5  --log-output --final-map-size 1 -p2 --epochs 100 -j 16 >mask_model2.log&
