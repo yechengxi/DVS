@@ -528,7 +528,7 @@ class ECN_Pose(nn.Module):
                 decode[-1] = torch.cat([decode[-1][:, :self.pred_planes] + predicts[-1], decode[-1][:, self.pred_planes:]],dim=1)  # residual learning
 
         predicts.reverse()
-
+        print(predicts[i].min().item(),predicts[i].max().item())
         exps = [F.softmax(predicts[i],dim=1) for i in range(self.predicts)]
 
         final_pose=[torch.sum(pose*exps[i].unsqueeze(4),dim=1).permute(0,3,1,2) for i in range(self.predicts)]
