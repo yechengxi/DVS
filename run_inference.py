@@ -90,7 +90,7 @@ def main():
     intrinsics = torch.from_numpy(intrinsics).unsqueeze(0).cuda()
     intrinsics_inv = torch.from_numpy(intrinsics_inv).unsqueeze(0).cuda()
     imgs = sorted(glob.glob(os.path.join(scene ,'slices' ,'frame*.png')))
-    masks = sorted(glob.glob(os.path.join(scene, 'slices', 'mask*.png')))
+    #masks = sorted(glob.glob(os.path.join(scene, 'slices', 'mask*.png')))
 
     print('{} files to test'.format(len(imgs)))
 
@@ -113,8 +113,8 @@ def main():
         file.ext='.jpg'
 
         img = imread(imgs[i]).astype(np.float32)
-        obj_mask = cv2.imread(masks[i], -1)
-        obj_mask=np.round(obj_mask/1000)
+        #obj_mask = cv2.imread(masks[i], -1)
+        #obj_mask=np.round(obj_mask/1000)
         ref_imgs=[]
         for j in shifts:
             ref_imgs.append(imread(imgs[i + j]).astype(np.float32))
