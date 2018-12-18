@@ -533,6 +533,13 @@ def train(args, train_loader, disp_net, pose_exp_net,optimizer, epoch_size,  tra
                             train_writer.add_image('train Exp mask Outputs {}'.format(k),
                                                    tensor2array(mask, max_value=1,
                                                                 colormap='bone'), n_iter)
+                    if k==0:
+                        for c in range(explainability_mask[0].shape[1]):
+                            mask=explainability_mask[0][0, c].data.cpu()
+                            train_writer.add_image('train Exp component {}'.format(c),
+                                                   tensor2array(mask, max_value=1,
+                                                                colormap='bone'), n_iter)
+
 
                     ref_warped = warped_refs_scaled[j][0]
                     stacked_im = stacked_im + ref_warped
