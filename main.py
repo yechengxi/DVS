@@ -44,6 +44,10 @@ parser.add_argument('--with-gt', action='store_true', help='use ground truth for
 
 parser.add_argument('-j', '--workers', default=8, type=int, metavar='N',
                     help='number of data loading workers')
+
+parser.add_argument('-c','--n-motions', default=3, type=int, metavar='N',
+                    help='number of independent motions')
+
 parser.add_argument('--epochs', default=20, type=int, metavar='N',
                     help='number of total epochs to run')
 parser.add_argument('--epoch-size', default=0, type=int, metavar='N',
@@ -201,7 +205,7 @@ def main():
     else:
         pose_exp_net = models.ECN_Pose(input_size=260,#260*args.scale*.5,
                                        nb_ref_imgs=args.sequence_length - 1,init_planes=args.n_channel//2,scale_factor=args.scale_factor,growth_rate=args.growth_rate//2,final_map_size=args.final_map_size,
-                                          norm_type=args.norm_type).cuda()
+                                          norm_type=args.norm_type,n_motions=args.n_motions).cuda()
 
 
     if args.pretrained_posenet:
