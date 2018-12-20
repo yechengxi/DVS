@@ -534,9 +534,9 @@ def train(args, train_loader, disp_net, pose_exp_net,optimizer, epoch_size,  tra
                                                    tensor2array(mask, max_value=1,
                                                                 colormap='bone'), n_iter)
                     if k==0:
-                        for c in range(explainability_mask[0].shape[1]):
-                            mask=explainability_mask[0][0, c].data.cpu()
-                            train_writer.add_image('train Exp component {}'.format(c),
+                        if (explainability_mask[0].shape[1]>=4):
+                            mask=explainability_mask[0][0, 1:4].data.cpu()
+                            train_writer.add_image('train Exp components',
                                                    tensor2array(mask, max_value=1,
                                                                 colormap='bone'), n_iter)
 
