@@ -153,12 +153,15 @@ class explainability_loss(nn.Module):
         weight=0
         for mask_scaled in mask:
             N,C,H,W=mask_scaled.shape
+            mask_scaled=torch.clamp(mask_scaled, min=0.001, max=0.999)
+
             if min(H,W)<4:
                 continue
             dx, dy = gradient(mask_scaled)
             loss += (dx.abs().view(N, -1).mean(1) + dy.abs().view(N, -1).mean(1)) * H * W
+
             if C>1:
-                #loss += .01*torch.pow(mask_scaled,.5).view(N, -1).mean(1) * H * W *C#check this!
+                #loss += 1*torch.pow(mask_scaled,.5).view(N, -1).mean(1) * H * W *C#check this!
                 #print('s',mask_scaled.min().item(),mask_scaled.max().item())
                 #m=((mask_scaled<0.8)*(mask_scaled>0.2)).sum().item()
                 #print(m/N/C/H/W)
