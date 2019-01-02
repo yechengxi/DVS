@@ -119,3 +119,12 @@ CUDA_VISIBLE_DEVICES=0,1,2,3 python main.py $data_dir -m1 --batch-size 32 -f 50 
 
 data_dir=/vulcan/scratch/cxy/Data/DVS/lab/
 CUDA_VISIBLE_DEVICES=0,1,2,3 python main.py $data_dir -m1.01 --batch-size 32 -f 50 --lr 2e-4 -s1 -d.5  --sequence-length 5 --slices 0  --log-output --with-gt --final-map-size 8 -p2 --epochs 50 -j 16 --pretrained-dispnet pretrained/mask3/dispnet_checkpoint.pth.tar -c4 >4comp_2.log&
+
+
+
+
+data_dir=/vulcan/scratch/cxy/Data/DVS/lab/
+dispnet_dir=pretrained/mask3/dispnet_checkpoint.pth.tar
+posenet_dir=pretrained/mask3/exp_pose_checkpoint.pth.tar
+
+CUDA_VISIBLE_DEVICES=0,1,2,3 python main.py $data_dir -m1 --batch-size 32 -f 50 --lr 2e-4  -s1  --sequence-length 5 --slices 25 --log-output --with-gt --final-map-size 8 -p1 --sharp --epochs 20 --pretrained-dispnet $dispnet_dir --pretrained-posenet $posenet_dir >slice_1.log&

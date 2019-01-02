@@ -159,7 +159,6 @@ class CloudSequenceFolder(data.Dataset):
             for id in range(self.n_scenes):
                 self.raw_data[id] = load_scene_s(self.raw_data[id])
 
-            self.train_idx = []
 
 
 
@@ -188,7 +187,7 @@ class CloudSequenceFolder(data.Dataset):
                     print('raw data:', id, len(self.raw_data[id]['gt_ts']), len(imgs))
                     tmp = [i for i in range(len(self.raw_data[id]['gt_ts']))]
                     self.raw_data[id]['n_train'] = len(tmp[:split])
-                    self.train_idx += list(zip([id for i in range(len(tmp[:split]))], tmp[:split]))
+                    train_idx = list(zip([id for i in range(len(tmp[:split]))], tmp[:split]))
 
                 imgs = imgs[:split]
                 depths = depths[:split]
@@ -208,7 +207,7 @@ class CloudSequenceFolder(data.Dataset):
             for i in range(demi_length, len(imgs) - demi_length):
                 sample = {'intrinsics': intrinsics, 'tgt': imgs[i], 'ref_imgs': [], 'depth': self.depths[i],'D':distortion,'mask':self.masks[i]}
                 if self.train and self.slices>0:
-                    sample['cloud_idx']=self.train_idx[i]
+                    sample['cloud_idx']=train_idx[i]
                 for j in shifts:
                     sample['ref_imgs'].append(imgs[i + j])
                 if self.train or os.path.exists(self.depths[i]) or (not self.gt):
