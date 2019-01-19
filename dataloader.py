@@ -114,6 +114,8 @@ def load_scene_s(scene_path, with_gt=False):
     scene['D'] = scene_npz['D'].astype(np.float32)
     if with_gt:
         scene['depth'] = scene_npz['depth'].astype(np.float32)
+        scene['mask'] = scene_npz['mask'].astype(np.float32)
+
     scene['gt_ts'] = scene_npz['gt_ts']
     # scene['flow']= scene_npz['flow']
     return scene
@@ -157,9 +159,7 @@ class CloudSequenceFolder(data.Dataset):
             t_s = time.time()
             self.raw_data = [os.path.join(scene, 'recording.npz') for scene in self.scenes]
             for id in range(self.n_scenes):
-                self.raw_data[id] = load_scene_s(self.raw_data[id])
-
-
+                self.raw_data[id] = load_scene_s(self.raw_data[id],with_gt=True)
 
 
         sequence_set = []
@@ -182,21 +182,28 @@ class CloudSequenceFolder(data.Dataset):
 
 
             split = int(len(imgs) * .8)
-            if self.train:
-                if self.slices>0:
-                    print('raw data:', id, len(self.raw_data[id]['gt_ts']), len(imgs))
-                    tmp = [i for i in range(len(self.raw_data[id]['gt_ts']))]
-                    self.raw_data[id]['n_train'] = len(tmp[:split])
-                    train_idx = list(zip([id for i in range(len(tmp[:split]))], tmp[:split]))
 
+
+            if self.slices>0:
+                print('raw data:', id, len(self.raw_data[id]['gt_ts']), len(imgs))
+                tmp = [i for i in range(len(self.raw_data[id]['gt_ts']))]
+                self.raw_data[id]['n_train'] = len(tmp[:split])
+                self.raw_data[id]['n_test'] = len(tmp[split:])
+                cloud_idx = list(zip([id for i in range(len(tmp))], tmp))
+
+            if self.train:
                 imgs = imgs[:split]
                 depths = depths[:split]
                 masks = masks[:split]
+
 
             else:
                 imgs = imgs[split:]
                 depths = depths[split:]
                 masks = masks[split:]
+
+
+
 
             self.depths = depths
             self.masks = masks
@@ -206,8 +213,8 @@ class CloudSequenceFolder(data.Dataset):
 
             for i in range(demi_length, len(imgs) - demi_length):
                 sample = {'intrinsics': intrinsics, 'tgt': imgs[i], 'ref_imgs': [], 'depth': self.depths[i],'D':distortion,'mask':self.masks[i]}
-                if self.train and self.slices>0:
-                    sample['cloud_idx']=train_idx[i]
+                if self.slices>0:
+                    sample['cloud_idx']=cloud_idx[i]
                 for j in shifts:
                     sample['ref_imgs'].append(imgs[i + j])
                 if self.train or os.path.exists(self.depths[i]) or (not self.gt):
@@ -221,43 +228,53 @@ class CloudSequenceFolder(data.Dataset):
         sample = self.samples[index]
 
         slices = []
-        if self.train:
-            if self.slices>0:
-                scene_id, index = sample['cloud_idx']
-                gt_ts=self.raw_data[scene_id]['gt_ts'][index]
 
-                cloud = self.raw_data[scene_id]['events']
-                cloud_idx =self.raw_data[scene_id]['index']
-                sl, idx = get_slice(cloud, cloud_idx, gt_ts, 0.25, 1, self.raw_data[scene_id]['discretization'])
+        if self.slices == 0:
+            tgt_img = load_as_float(sample['tgt'])
+            ref_imgs = [load_as_float(ref_img) for ref_img in sample['ref_imgs']]
+            depth = cv2.imread(sample['depth'], -1)
+            obj_mask = cv2.imread(sample['mask'], -1)
+        else:
 
-                n_slice = len(idx)
-                idx = list(idx) + [len(sl)]
+            scene_id, index = sample['cloud_idx']
+            gt_ts=self.raw_data[scene_id]['gt_ts'][index]
 
-                if self.train and (self.slices>0):
-                    T = int(n_slice / self.slices)
-                    # store slices
-                    for i in range(self.slices):
-                        mini_slice = sl[idx[i*T]:idx[(i + 1)*T]]
-                        cmb = dvs_img(mini_slice, global_shape,  self.raw_data[scene_id]['K'], self.raw_data[scene_id]['D'])
-                        slices.append(cmb)
+            cloud = self.raw_data[scene_id]['events']
+            cloud_idx =self.raw_data[scene_id]['index']
+            sl, idx = get_slice(cloud, cloud_idx, gt_ts, 0.25, 1, self.raw_data[scene_id]['discretization'])
 
+            n_slice = len(idx)
+            idx = list(idx) + [len(sl)]
 
+            T = int(n_slice / self.sequence_length)
+            seqs = []
+            for i in range(self.sequence_length):
+                mini_slice = sl[idx[i * T]:idx[(i + 1) * T]]
+                cmb = dvs_img(mini_slice, global_shape, self.raw_data[scene_id]['K'], self.raw_data[scene_id]['D'])
+                seqs.append(cmb)
 
+            T = int(n_slice / self.slices)
+            # store slices
+            for i in range(self.slices):
+                mini_slice = sl[idx[i*T]:idx[(i + 1)*T]]
+                cmb = dvs_img(mini_slice, global_shape,  self.raw_data[scene_id]['K'], self.raw_data[scene_id]['D'])
+                slices.append(cmb)
 
-        tgt_img = load_as_float(sample['tgt'])
+            tgt_img = seqs.pop((len(seqs)-1)//2)
+            ref_imgs = seqs
+            depth = self.raw_data[scene_id]['depth'][index]
+            obj_mask = self.raw_data[scene_id]['mask'][index]
+            depth[np.isnan(depth)] = 10000
 
-        ref_imgs = [load_as_float(ref_img) for ref_img in sample['ref_imgs']]
-
-        depth = cv2.imread(sample['depth'], -1)
         depth[depth<100]=10000
         depth = depth.astype(np.float32) / 6000*255
         depth=np.expand_dims(depth,axis=2)
 
-        obj_mask = cv2.imread(sample['mask'], -1)
         obj_mask = obj_mask.astype(np.float32)/1000*255
         obj_mask=np.expand_dims(obj_mask,axis=2)
 
         depth=np.concatenate((depth,obj_mask),axis=2)
+
 
         if self.transform is not None:
 
