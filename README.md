@@ -127,4 +127,10 @@ data_dir=/vulcan/scratch/anton/EV-IMO-learning
 CUDA_VISIBLE_DEVICES=0,1,2,3 python main.py $data_dir -m1 --batch-size 16 -f 500 --lr 1e-3  -s1  --sequence-length 5 --log-output --with-gt --final-map-size 8 -p1 --epochs 20  >no_slice_1.log&
 
 data_dir=/vulcan/scratch/anton/EV-IMO-learning
-CUDA_VISIBLE_DEVICES=4,5,6,7 python main.py $data_dir -m1 --batch-size 16 -f 500 --lr 1e-3  -s1  --sequence-length 5 --slices 25 --log-output --with-gt --final-map-size 8 -p1 --sharp --epochs 20  >slice_1.log&
+CUDA_VISIBLE_DEVICES=0,1,2,3 python main.py $data_dir -m1 --batch-size 24 -f 500 --lr 1e-3  -s1  --sequence-length 5 --slices 25 --log-output --with-gt --final-map-size 8 -p1 --sharp --epochs 50  >slice_2.log&
+
+
+data_dir=/vulcan/scratch/anton/EV-IMO-learning
+CUDA_VISIBLE_DEVICES=0,1,2,3 python main.py $data_dir -m1 --batch-size 64 -f 500 --lr 1e-3  -s1  --sequence-length 5 --slices 5 --log-output --with-gt --final-map-size 8 -p1 --sharp --epochs 50  >slice_2.5.log&
+
+
