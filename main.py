@@ -196,7 +196,7 @@ def main():
         )
 
         # if no Groundtruth is avalaible, Validation set is the same type as training set to measure photometric loss from warping
-        val_set = ImageCloudSequenceFolder(
+        val_set = ImageSequenceFolder(
             args.data,
             transform=valid_transform,
             seed=args.seed,
