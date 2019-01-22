@@ -114,6 +114,8 @@ def load_scene_s(scene_path, with_gt=False):
     scene['D'] = scene_npz['D'].astype(np.float32)
     if with_gt:
         scene['depth'] = scene_npz['depth'].astype(np.float32)
+        scene['mask'] = scene_npz['mask'].astype(np.float32)
+
     scene['gt_ts'] = scene_npz['gt_ts']
     # scene['flow']= scene_npz['flow']
     return scene
@@ -296,15 +298,17 @@ class CloudSequenceFolder(data.Dataset):
             f = open(os.path.join(scene, 'calib.txt'), 'r')
             import re
             non_decimal = re.compile(r'[^\d. ]+')
-            #l = [[float(num) for num in non_decimal.sub('', line).split()] for line in f]
-            #intrinsics = np.asarray(l[:3]).astype(np.float32)
-            #distortion = np.asarray(l[4]).astype(np.float32)
 
+            l = [[float(num) for num in non_decimal.sub('', line).split()] for line in f]
+            intrinsics = np.asarray(l[:3]).astype(np.float32)
+            distortion = np.asarray(l[4]).astype(np.float32)
+
+            """
             line = f.readline()
             l = [float(num) for num in line.split()]
-
             intrinsics = np.asarray([[l[1],0,l[3]],[0,l[0],l[2]],[0,0,1]]).astype(np.float32)
             distortion = np.asarray(l[4:]).astype(np.float32)
+            """
 
             imgs = sorted(glob.glob(os.path.join(scene,'slices', 'frame*.png')))
             depths = sorted(glob.glob(os.path.join(scene,'slices', 'depth*.png')))
@@ -359,42 +363,36 @@ class CloudSequenceFolder(data.Dataset):
 
         slices = []
 
-        if self.slices == 0:
-            tgt_img = load_as_float(sample['tgt'])
-            ref_imgs = [load_as_float(ref_img) for ref_img in sample['ref_imgs']]
-            depth = cv2.imread(sample['depth'], -1)
-            obj_mask = cv2.imread(sample['mask'], -1)
-        else:
 
-            scene_id, index = sample['cloud_idx']
-            gt_ts=self.raw_data[scene_id]['gt_ts'][index]
+        scene_id, index = sample['cloud_idx']
+        gt_ts=self.raw_data[scene_id]['gt_ts'][index]
 
-            cloud = self.raw_data[scene_id]['events']
-            cloud_idx =self.raw_data[scene_id]['index']
-            sl, idx = get_slice(cloud, cloud_idx, gt_ts, 0.25, 0, self.raw_data[scene_id]['discretization'])
+        cloud = self.raw_data[scene_id]['events']
+        cloud_idx =self.raw_data[scene_id]['index']
+        sl, idx = get_slice(cloud, cloud_idx, gt_ts, 0.25, 0, self.raw_data[scene_id]['discretization'])
 
-            n_slice = len(idx)
-            idx = list(idx) + [len(sl)]
+        n_slice = len(idx)
+        idx = list(idx) + [len(sl)]
 
-            T = int(n_slice / self.sequence_length)
-            seqs = []
-            for i in range(self.sequence_length):
-                mini_slice = sl[idx[i * T]:idx[(i + 1) * T]]
-                cmb = dvs_img(mini_slice, global_shape, self.raw_data[scene_id]['K'], self.raw_data[scene_id]['D'])
-                seqs.append(cmb)
+        T = int(n_slice / self.sequence_length)
+        seqs = []
+        for i in range(self.sequence_length):
+            mini_slice = sl[idx[i * T]:idx[(i + 1) * T]]
+            cmb = dvs_img(mini_slice, global_shape, self.raw_data[scene_id]['K'], self.raw_data[scene_id]['D'])
+            seqs.append(cmb)
 
-            T = int(n_slice / self.slices)
-            # store slices
-            for i in range(self.slices):
-                mini_slice = sl[idx[i*T]:idx[(i + 1)*T]]
-                cmb = dvs_img(mini_slice, global_shape,  self.raw_data[scene_id]['K'], self.raw_data[scene_id]['D'])
-                slices.append(cmb)
+        T = int(n_slice / self.slices)
+        # store slices
+        for i in range(self.slices):
+            mini_slice = sl[idx[i*T]:idx[(i + 1)*T]]
+            cmb = dvs_img(mini_slice, global_shape,  self.raw_data[scene_id]['K'], self.raw_data[scene_id]['D'])
+            slices.append(cmb)
 
-            tgt_img = seqs.pop((len(seqs)-1)//2)
-            ref_imgs = seqs
-            depth = self.raw_data[scene_id]['depth'][index]
-            obj_mask = self.raw_data[scene_id]['mask'][index]
-            depth[np.isnan(depth)] = 10000
+        tgt_img = seqs.pop((len(seqs)-1)//2)
+        ref_imgs = seqs
+        depth = self.raw_data[scene_id]['depth'][index]
+        obj_mask = self.raw_data[scene_id]['mask'][index]
+        depth[np.isnan(depth)] = 10000
 
         depth[depth<100]=10000
         depth = depth.astype(np.float32) / 6000*255
@@ -416,10 +414,7 @@ class CloudSequenceFolder(data.Dataset):
         else:
             intrinsics = np.copy(sample['intrinsics'])
 
-        if slices is not None:
-            return tgt_img, ref_imgs, intrinsics, np.linalg.inv(intrinsics), depth,slices
-        else:
-            return tgt_img, ref_imgs, intrinsics, np.linalg.inv(intrinsics), depth
+        return tgt_img, ref_imgs, intrinsics, np.linalg.inv(intrinsics), depth,slices
 
     def __len__(self):
         return len(self.samples)
