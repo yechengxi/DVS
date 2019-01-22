@@ -165,7 +165,6 @@ class ImageSequenceFolder(data.Dataset):
         for id, scene in enumerate(self.scenes):
             f = open(os.path.join(scene, 'calib.txt'), 'r')
             import re
-            """
             non_decimal = re.compile(r'[^\d. ]+')
             l = [[float(num) for num in non_decimal.sub('', line).split()] for line in f]
             intrinsics = np.asarray(l[:3]).astype(np.float32)
@@ -175,7 +174,7 @@ class ImageSequenceFolder(data.Dataset):
             l = [float(num) for num in line.split()]
             intrinsics = np.asarray([[l[1],0,l[3]],[0,l[0],l[2]],[0,0,1]]).astype(np.float32)
             distortion = np.asarray(l[4:]).astype(np.float32)
-
+            """
             imgs = sorted(glob.glob(os.path.join(scene,'slices', 'frame*.png')))
             depths = sorted(glob.glob(os.path.join(scene,'slices', 'depth*.png')))
             masks = sorted(glob.glob(os.path.join(scene, 'slices', 'mask*.png')))
