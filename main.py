@@ -639,7 +639,24 @@ def validate_with_gt(args, val_loader, disp_net, pose_exp_net, epoch, output_wri
     start_time = time.time()
 
     end = time.time()
-    for i, (tgt_img,ref_imgs,intrinsics,intrinsics_inv, gt,slices) in enumerate(val_loader):
+
+    for i, data in enumerate(val_loader):
+        if len(data) == 4:
+            tgt_img, ref_imgs, intrinsics, intrinsics_inv = data
+        if len(data) >= 5:
+            if len(data) == 5:
+                tgt_img, ref_imgs, intrinsics, intrinsics_inv, gt = data
+            if len(data) == 6:
+                tgt_img, ref_imgs, intrinsics, intrinsics_inv, gt, slices = data
+                if args.sharp:
+                    slices = [img.cuda() for img in slices]
+            if gt.shape[1] == 2:
+                gt_depth = gt[:, :1].cuda()
+                gt_mask = torch.round(gt[:, 1:].cuda())
+            else:
+                gt_mask = (gt[:, :1] < 0.99).cuda()
+
+
         with torch.no_grad():
             tgt_img_var = tgt_img.cuda()
             ref_imgs_var = [img.cuda() for img in ref_imgs]
