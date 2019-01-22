@@ -1,6 +1,14 @@
+#!/usr/bin/python3
+
 import argparse
-import time
+import sys, time
 import csv
+
+# OpenCV for Python 3 does not like ROS
+try:
+    sys.path.remove('/opt/ros/kinetic/lib/python2.7/dist-packages')
+except:
+    pass
 
 import numpy as np
 import torch

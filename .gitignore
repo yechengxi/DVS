@@ -1,0 +1,4 @@
+*.swp
+*.pyc
+checkpoints
+__pycache__
