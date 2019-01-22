@@ -369,7 +369,7 @@ class CloudSequenceFolder(data.Dataset):
 
         cloud = self.raw_data[scene_id]['events']
         cloud_idx =self.raw_data[scene_id]['index']
-        sl, idx = get_slice(cloud, cloud_idx, gt_ts, 0.25, 0, self.raw_data[scene_id]['discretization'])
+        sl, idx = get_slice(cloud, cloud_idx, gt_ts, 0.25, 1, self.raw_data[scene_id]['discretization'])
 
         n_slice = len(idx)
         idx = list(idx) + [len(sl)]
