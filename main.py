@@ -164,26 +164,47 @@ def main():
                                                 ])
 
     print("=> fetching scenes in '{}'".format(args.data))
-    train_set = CloudSequenceFolder(
-        args.data,
-        transform=train_transform,
-        seed=args.seed,
-        train=True,
-        sequence_length=args.sequence_length,
-        slices=args.slices,
-        scale=args.scale
-    )
+    if args.slices>0:
+        train_set = CloudSequenceFolder(
+            args.data,
+            transform=train_transform,
+            seed=args.seed,
+            train=True,
+            sequence_length=args.sequence_length,
+            slices=args.slices,
+            scale=args.scale
+        )
 
-    # if no Groundtruth is avalaible, Validation set is the same type as training set to measure photometric loss from warping
-    val_set = CloudSequenceFolder(
-        args.data,
-        transform=valid_transform,
-        seed=args.seed,
-        train=False,
-        sequence_length=args.sequence_length,
-        scale=args.scale,
-        gt=args.with_gt
-    )
+        # if no Groundtruth is avalaible, Validation set is the same type as training set to measure photometric loss from warping
+        val_set = CloudSequenceFolder(
+            args.data,
+            transform=valid_transform,
+            seed=args.seed,
+            train=False,
+            sequence_length=args.sequence_length,
+            scale=args.scale,
+            gt=args.with_gt
+        )
+    else:
+        train_set = ImageSequenceFolder(
+            args.data,
+            transform=train_transform,
+            seed=args.seed,
+            train=True,
+            sequence_length=args.sequence_length,
+            scale=args.scale
+        )
+
+        # if no Groundtruth is avalaible, Validation set is the same type as training set to measure photometric loss from warping
+        val_set = ImageCloudSequenceFolder(
+            args.data,
+            transform=valid_transform,
+            seed=args.seed,
+            train=False,
+            sequence_length=args.sequence_length,
+            scale=args.scale,
+            gt=args.with_gt
+        )
 
     print('{} samples found in {} train scenes'.format(len(train_set), len(train_set.scenes)))
     print('{} samples found in {} valid scenes'.format(len(val_set), len(val_set.scenes)))
