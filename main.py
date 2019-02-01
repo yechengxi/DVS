@@ -1,6 +1,14 @@
+#!/usr/bin/python3
+
 import argparse
-import time
+import sys, time
 import csv
+
+# OpenCV for Python 3 does not like ROS
+try:
+    sys.path.remove('/opt/ros/kinetic/lib/python2.7/dist-packages')
+except:
+    pass
 
 import numpy as np
 import torch
@@ -156,26 +164,47 @@ def main():
                                                 ])
 
     print("=> fetching scenes in '{}'".format(args.data))
-    train_set = CloudSequenceFolder(
-        args.data,
-        transform=train_transform,
-        seed=args.seed,
-        train=True,
-        sequence_length=args.sequence_length,
-        slices=args.slices,
-        scale=args.scale
-    )
+    if args.slices>0:
+        train_set = CloudSequenceFolder(
+            args.data,
+            transform=train_transform,
+            seed=args.seed,
+            train=True,
+            sequence_length=args.sequence_length,
+            slices=args.slices,
+            scale=args.scale
+        )
 
-    # if no Groundtruth is avalaible, Validation set is the same type as training set to measure photometric loss from warping
-    val_set = CloudSequenceFolder(
-        args.data,
-        transform=valid_transform,
-        seed=args.seed,
-        train=False,
-        sequence_length=args.sequence_length,
-        scale=args.scale,
-        gt=args.with_gt
-    )
+        # if no Groundtruth is avalaible, Validation set is the same type as training set to measure photometric loss from warping
+        val_set = ImageSequenceFolder(
+            args.data,
+            transform=valid_transform,
+            seed=args.seed,
+            train=False,
+            sequence_length=args.sequence_length,
+            scale=args.scale,
+            gt=args.with_gt
+        )
+    else:
+        train_set = ImageSequenceFolder(
+            args.data,
+            transform=train_transform,
+            seed=args.seed,
+            train=True,
+            sequence_length=args.sequence_length,
+            scale=args.scale
+        )
+
+        # if no Groundtruth is avalaible, Validation set is the same type as training set to measure photometric loss from warping
+        val_set = ImageSequenceFolder(
+            args.data,
+            transform=valid_transform,
+            seed=args.seed,
+            train=False,
+            sequence_length=args.sequence_length,
+            scale=args.scale,
+            gt=args.with_gt
+        )
 
     print('{} samples found in {} train scenes'.format(len(train_set), len(train_set.scenes)))
     print('{} samples found in {} valid scenes'.format(len(val_set), len(val_set.scenes)))
@@ -610,7 +639,24 @@ def validate_with_gt(args, val_loader, disp_net, pose_exp_net, epoch, output_wri
     start_time = time.time()
 
     end = time.time()
-    for i, (tgt_img,ref_imgs,intrinsics,intrinsics_inv, gt,slices) in enumerate(val_loader):
+
+    for i, data in enumerate(val_loader):
+        if len(data) == 4:
+            tgt_img, ref_imgs, intrinsics, intrinsics_inv = data
+        if len(data) >= 5:
+            if len(data) == 5:
+                tgt_img, ref_imgs, intrinsics, intrinsics_inv, gt = data
+            if len(data) == 6:
+                tgt_img, ref_imgs, intrinsics, intrinsics_inv, gt, slices = data
+                if args.sharp:
+                    slices = [img.cuda() for img in slices]
+            if gt.shape[1] == 2:
+                gt_depth = gt[:, :1].cuda()
+                gt_mask = torch.round(gt[:, 1:].cuda())
+            else:
+                gt_mask = (gt[:, :1] < 0.99).cuda()
+
+
         with torch.no_grad():
             tgt_img_var = tgt_img.cuda()
             ref_imgs_var = [img.cuda() for img in ref_imgs]
