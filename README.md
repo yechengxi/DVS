@@ -155,3 +155,5 @@ CUDA_VISIBLE_DEVICES=0,1,2,3 python main.py $data_dir -m1 --batch-size 24 -f 500
 
 
 CUDA_VISIBLE_DEVICES=0,1,2,3 python main.py $data_dir -d0. --norm-type fd --batch-size 32 -f 100 --lr 1e-2 --sequence-length 5 --log-output --with-gt --final-map-size 4  --epochs 50  >noslice.log&
+
+CUDA_VISIBLE_DEVICES=0,1,2,3 python main.py $data_dir -d0.5  --batch-size 32 -f 100 --lr 1e-3 --sequence-length 5 --log-output --with-gt  --epochs 50  >noslice_std.log&
