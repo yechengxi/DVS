@@ -27,6 +27,7 @@ def save_path_formatter(args, parser):
     keys_with_prefix['pose_loss_weight'] = 'p'
     keys_with_prefix['flow_smooth_loss_weight'] = 'o'
     keys_with_prefix['pixelpose'] = 'pixelwise'
+    keys_with_prefix['norm-type'] = ''
 
 
 
