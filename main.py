@@ -222,20 +222,23 @@ def main():
     print("=> creating model")
 
 
-    disp_net = models.ECN_Disp(input_size=260,#260*args.scale*.5,
-                               init_planes=args.n_channel,scale_factor=args.scale_factor,growth_rate=args.growth_rate,final_map_size=args.final_map_size,norm_type=args.norm_type).cuda()
+    if args.arch=='ecn':
+        disp_net = models.ECN_Disp(input_size=260,#260*args.scale*.5,
+                                   init_planes=args.n_channel,scale_factor=args.scale_factor,growth_rate=args.growth_rate,final_map_size=args.final_map_size,norm_type=args.norm_type).cuda()
 
 
-    if args.pixelpose:
-        pose_exp_net = models.ECN_PixelPose(input_size=260,#260*args.scale*.5,
-                                       nb_ref_imgs=args.sequence_length - 1,init_planes=args.n_channel//2,scale_factor=args.scale_factor,growth_rate=args.growth_rate//2,final_map_size=args.final_map_size,
-                                          norm_type=args.norm_type).cuda()
+        if args.pixelpose:
+            pose_exp_net = models.ECN_PixelPose(input_size=260,#260*args.scale*.5,
+                                           nb_ref_imgs=args.sequence_length - 1,init_planes=args.n_channel//2,scale_factor=args.scale_factor,growth_rate=args.growth_rate//2,final_map_size=args.final_map_size,
+                                              norm_type=args.norm_type).cuda()
 
+        else:
+            pose_exp_net = models.ECN_Pose(input_size=260,#260*args.scale*.5,
+                                           nb_ref_imgs=args.sequence_length - 1,init_planes=args.n_channel//2,scale_factor=args.scale_factor,growth_rate=args.growth_rate//2,final_map_size=args.final_map_size,
+                                              norm_type=args.norm_type,n_motions=args.n_motions).cuda()
     else:
-        pose_exp_net = models.ECN_Pose(input_size=260,#260*args.scale*.5,
-                                       nb_ref_imgs=args.sequence_length - 1,init_planes=args.n_channel//2,scale_factor=args.scale_factor,growth_rate=args.growth_rate//2,final_map_size=args.final_map_size,
-                                          norm_type=args.norm_type,n_motions=args.n_motions).cuda()
-
+        disp_net = models.DispNetS().cuda()
+        pose_exp_net=models.PoseExpNet( nb_ref_imgs=args.sequence_length - 1).cuda()
 
     if args.pretrained_posenet:
         print("=> using pre-trained weights for explainabilty and pose net")
