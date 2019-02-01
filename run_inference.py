@@ -5,7 +5,7 @@ import numpy as np
 from path import Path
 import argparse
 
-import models
+from models.ECN_old import *
 from utils import tensor2array
 
 from inverse_warp import *
@@ -52,7 +52,7 @@ def main():
 
 
     if args.arch=='ecn':
-        disp_net = models.ECN_Disp(input_size=args.img_height,init_planes=args.n_channel,scale_factor=args.scale_factor,growth_rate=args.growth_rate,final_map_size=args.final_map_size,norm_type=args.norm_type).cuda()
+        disp_net = ECN_Disp(input_size=args.img_height,init_planes=args.n_channel,scale_factor=args.scale_factor,growth_rate=args.growth_rate,final_map_size=args.final_map_size,norm_type=args.norm_type).cuda()
     else:
         disp_net = models.DispNetS().cuda()
 
@@ -63,7 +63,7 @@ def main():
     if args.pretrained_posenet:
 
         if args.arch == 'ecn':
-            pose_net = models.ECN_Pose(input_size=args.img_height, nb_ref_imgs=args.sequence_length - 1,
+            pose_net = ECN_Pose(input_size=args.img_height, nb_ref_imgs=args.sequence_length - 1,
                                            init_planes=args.n_channel // 2, scale_factor=args.scale_factor,
                                            growth_rate=args.growth_rate // 2, final_map_size=args.final_map_size,
                                            output_exp=True, output_exp2=True,
@@ -110,7 +110,9 @@ def main():
     shifts = list(range(-demi_length, demi_length + 1))
     shifts.pop(demi_length)
 
-    for i in range(demi_length,len(imgs)-demi_length):
+
+    #for i in range(demi_length,len(imgs)-demi_length):
+    for i in range(1153,1154):
 
         file =File()
         file.namebase=os.path.basename(imgs[i]).replace('.jpg','')
@@ -139,7 +141,8 @@ def main():
             ref_imgs = [(im / 255 ).cuda() for im in ref_imgs]
 
 
-            output_s= disp_net(img)#,raw_disp
+            msg='encode'
+            output_s= disp_net(img,msg)#,raw_disp
 
             output_depth = 1 / output_s
 
@@ -163,7 +166,7 @@ def main():
             output_depth=output_depth[0,0].cpu()
 
             if args.output_disp:
-                disp = (255*tensor2array(output_s, max_value=None, colormap='bone')).astype(np.uint8)
+                disp = (255*tensor2array(output_s, max_value=None, colormap='bone')).astype(np.uint8).transpose((1,2,0))
                 imsave(output_dir/'disp_{}{}'.format(file.namebase,file.ext), disp)
                 np.save(output_dir/'depth_{}{}'.format(file.namebase,'.npy'),output_depth.data.numpy())
                 if args.pretrained_posenet is not None:

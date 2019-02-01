@@ -396,7 +396,6 @@ class ECN_Pose(nn.Module):
         else:
             exps = [None for i in range(self.predicts)]
 
-
         if self.training:
             return exps, pose
         else:

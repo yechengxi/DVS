@@ -40,7 +40,6 @@ parser.add_argument('--padding-mode', type=str, choices=['zeros', 'border'], def
 parser.add_argument('--with-gt', action='store_true', help='use ground truth for validation. \
                     You need to store it in npy 2D arrays see data/kitti_raw_loader.py for an example')
 
-
 parser.add_argument('-j', '--workers', default=8, type=int, metavar='N',
                     help='number of data loading workers')
 parser.add_argument('--epochs', default=20, type=int, metavar='N',
@@ -97,7 +96,6 @@ parser.add_argument('--multistep-gamma', default=0.1, type=float,
 
 parser.add_argument('--arch', default='ecn', help='architecture')
 parser.add_argument('--norm-type', default='gn', help='normalization type')
-
 
 parser.add_argument('--n-channel', '--init-channel', default=32, type=int,
                     help='initial feature channels(32|64|128).')
@@ -720,8 +718,6 @@ def validate_with_gt(args, val_loader, disp_net, pose_exp_net, epoch, output_wri
     print(msg)
 
     return errors_s.avg, error_names
-
-
 
 
 if __name__ == '__main__':
