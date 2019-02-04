@@ -40,6 +40,8 @@ parser.add_argument('data', metavar='DIR',
                     help='path to dataset')
 parser.add_argument('--sequence-length', type=int, metavar='N', help='sequence length for training', default=3)
 parser.add_argument('--slices', type=int, metavar='N', help='slice length for training', default=0)
+parser.add_argument('--duration', type=float, metavar='N', help='duration for a big slice', default=0.05)
+
 parser.add_argument('--rotation-mode', type=str, choices=['euler', 'quat'], default='euler',
                     help='rotation mode for PoseExpnet : euler (yaw,pitch,roll) or quaternion (last 3 coefficients)')
 parser.add_argument('--padding-mode', type=str, choices=['zeros', 'border'], default='zeros',
@@ -172,6 +174,7 @@ def main():
             train=True,
             sequence_length=args.sequence_length,
             slices=args.slices,
+            duration=args.duration,
             scale=args.scale
         )
 

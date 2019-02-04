@@ -79,29 +79,6 @@ def get_mask(shape, K, D):
     mask = undistort_img(mask, K, D)
     return mask
 
-def dvs_img(cloud, shape, K, D):
-    cmb = np.zeros((shape[0], shape[1], 3), dtype=np.float32)
-    if (cloud.shape[0] == 0):
-        return cmb
-
-    fcloud = cloud.astype(np.float32)  # Important!
-    pydvs.dvs_img(fcloud, cmb)
-
-    cmb = undistort_img(cmb, K, D)
-
-    cnt_img = cmb[:, :, 0] + cmb[:, :, 2] + 1e-8
-    timg = cmb[:, :, 1]
-
-    timg[cnt_img < 0.99] = 0
-    timg /= cnt_img
-
-    cmb[:, :, 0] *= 50
-    cmb[:, :, 1] *= 255.0 / 0.05
-    #cmb[:, :, 1] *= 255.0 / 0.1
-    cmb[:, :, 2] *= 50
-
-    return cmb
-    return cmb.astype(np.uint8)
 
 
 def load_scene_s(scene_path, with_gt=False):
@@ -248,12 +225,13 @@ class ImageSequenceFolder(data.Dataset):
 
 class CloudSequenceFolder(data.Dataset):
 
-    def __init__(self, root, seed=None, train=True, sequence_length=3, slices=0, transform=None, LoadToRam=False, scale=1.,
+    def __init__(self, root, seed=None, train=True, sequence_length=3, slices=0,duration=0.05, transform=None, LoadToRam=False, scale=1.,
                  gt=True):
         np.random.seed(seed)
         random.seed(seed)
         self.sequence_length=sequence_length
         self.slices=slices
+        self.duration=duration
         self.LoadToRam = LoadToRam
         self.scale = scale
         self.root = Path(root)
@@ -358,6 +336,29 @@ class CloudSequenceFolder(data.Dataset):
 
         self.samples = sequence_set
 
+    def dvs_img(self,cloud, shape, K, D):
+        cmb = np.zeros((shape[0], shape[1], 3), dtype=np.float32)
+        if (cloud.shape[0] == 0):
+            return cmb
+
+        fcloud = cloud.astype(np.float32)  # Important!
+        pydvs.dvs_img(fcloud, cmb)
+
+        cmb = undistort_img(cmb, K, D)
+
+        cnt_img = cmb[:, :, 0] + cmb[:, :, 2] + 1e-8
+        timg = cmb[:, :, 1]
+
+        timg[cnt_img < 0.99] = 0
+        timg /= cnt_img
+        #print(nz_avg(cmb, 0))
+
+        cmb[:, :, 0] *= 50/self.duration*0.05
+        cmb[:, :, 1] *= 255.0 / self.duration
+        # cmb[:, :, 1] *= 255.0 / 0.1
+        cmb[:, :, 2] *= 50/self.duration*0.05
+        return cmb
+        return cmb.astype(np.uint8)
     def __getitem__(self, index):
         sample = self.samples[index]
 
@@ -369,7 +370,7 @@ class CloudSequenceFolder(data.Dataset):
 
         cloud = self.raw_data[scene_id]['events']
         cloud_idx =self.raw_data[scene_id]['index']
-        sl, idx = get_slice(cloud, cloud_idx, gt_ts, 0.25, 0, self.raw_data[scene_id]['discretization'])
+        sl, idx = get_slice(cloud, cloud_idx, gt_ts, self.duration*self.sequence_length, 0, self.raw_data[scene_id]['discretization'])
 
         n_slice = len(idx)
         idx = list(idx) + [len(sl)]
@@ -378,14 +379,14 @@ class CloudSequenceFolder(data.Dataset):
         seqs = []
         for i in range(self.sequence_length):
             mini_slice = sl[idx[i * T]:idx[(i + 1) * T]]
-            cmb = dvs_img(mini_slice, global_shape, self.raw_data[scene_id]['K'], self.raw_data[scene_id]['D'])
+            cmb = self.dvs_img(mini_slice, global_shape, self.raw_data[scene_id]['K'], self.raw_data[scene_id]['D'])
             seqs.append(cmb)
 
         T = int(n_slice / self.slices)
         # store slices
         for i in range(self.slices):
             mini_slice = sl[idx[i*T]:idx[(i + 1)*T]]
-            cmb = dvs_img(mini_slice, global_shape,  self.raw_data[scene_id]['K'], self.raw_data[scene_id]['D'])
+            cmb = self.dvs_img(mini_slice, global_shape,  self.raw_data[scene_id]['K'], self.raw_data[scene_id]['D'])
             slices.append(cmb)
 
         tgt_img = seqs.pop((len(seqs)-1)//2)
