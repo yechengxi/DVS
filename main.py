@@ -527,21 +527,22 @@ def train(args, train_loader, disp_net, pose_exp_net,optimizer, epoch_size,  tra
 
                 for j in range(len(warped_slices[0])):
                     ref_warped = warped_slices[0][j][0]  # slices[j][0]#
-                    ref_warped[1] = ref_warped[1] / 5.
+
                     event_im = ref_warped[0].abs() + ref_warped[2].abs()
-                    ref_warped[1] = (ref_warped[1] + j / args.slices) * (event_im)
+                    ref_warped[1] = (ref_warped[1]/ args.slices + j / args.slices) * event_im
 
                     counter_im += event_im
                     stacked_im = stacked_im + ref_warped
 
-                stacked_im[1][counter_im < 0.99 * 50 / 255.] = 0
+                stacked_im[1][counter_im < 0.99 * 50/args.duration*0.05 / 255.] = 0
                 stacked_im[1] = stacked_im[1] / (counter_im + 1e-3)
 
                 mask = (counter_im > (0.)).type_as(counter_im)  # 4./255*50
                 stacked_im[1] = stacked_im[1] * mask
-                stacked_im[1]=0
+                #stacked_im[1]=0
                 train_writer.add_image('train stacked slices',
                                        tensor2array(stacked_im.abs().data.cpu(), colormap='bone', max_value=None), n_iter)
+
                 train_writer.add_image('train event mask',
                                        tensor2array(mask.abs().data.cpu(), colormap='bone', max_value=None), n_iter)
 
