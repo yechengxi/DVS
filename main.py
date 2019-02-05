@@ -441,6 +441,9 @@ def train(args, train_loader, disp_net, pose_exp_net,optimizer, epoch_size,  tra
 
         loss_1=loss_1.mean()
 
+        if args.n_motions==1:
+            w2=0
+
         if w2 > 0:
             loss_2 = args.explainability_loss(explainability_mask,gt_mask).mean()
         else:
@@ -704,6 +707,9 @@ def validate_with_gt(args, val_loader, disp_net, pose_exp_net, epoch, output_wri
                                                                                          args.padding_mode)
 
             loss_1 = loss_1.mean()
+
+            if args.n_motions==1:
+                w2=0
 
             if w2 > 0:
                 loss_2 = args.explainability_loss(explainability_mask, gt_mask).mean()

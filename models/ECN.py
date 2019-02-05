@@ -508,8 +508,9 @@ class ECN_Pose(nn.Module):
         pose = self.pose_pred(out)
         pose = pose.mean(3).mean(2)
         pose = 0.01 * pose.view(pose.size(0), self.n_motions,1,1,6)
-        pose[:, 1:,:,:,3:]=0.
-        pose=torch.cat((pose[:,:1],pose[:,:1]+pose[:,1:]),dim=1)
+        if self.n_motions>1:
+            pose[:, 1:,:,:,3:]=0.
+            pose=torch.cat((pose[:,:1],pose[:,:1]+pose[:,1:]),dim=1)
 
         decode = [out]
         predicts = []
