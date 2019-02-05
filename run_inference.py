@@ -22,7 +22,6 @@ parser.add_argument("--pretrained-posenet", default=None, type=str, help="pretra
 parser.add_argument("--img-height", default=260, type=int, help="Image height")
 parser.add_argument("--img-width", default=346, type=int, help="Image width")
 parser.add_argument("--no-resize", action='store_true', help="no resizing is done")
-parser.add_argument("--multi", action='store_true', help="multi image depth")
 parser.add_argument('--sequence-length', type=int, metavar='N', help='sequence length for training', default=3)
 
 parser.add_argument("--dataset-list", default=None, type=str, help="Dataset list file")
@@ -33,7 +32,7 @@ parser.add_argument("--img-exts", default=['png', 'jpg', 'bmp'], nargs='*', type
 
 
 parser.add_argument('--arch', default='ecn', help='architecture')
-parser.add_argument('--norm-type', default='gn', help='normalization type')
+parser.add_argument('--norm-type', default='fd', help='normalization type')
 
 parser.add_argument('--n-channel', '--init-channel', default=32, type=int,
                     help='initial feature channels(32|64|128).')
@@ -43,31 +42,37 @@ parser.add_argument('--scale-factor', default=1. / 2.,
 parser.add_argument('--final-map-size', default=1, type=int, help='final map size')
 
 parser.add_argument("--pixelpose", action='store_true', help="use binary mask and pixel wise pose")
-
+parser.add_argument('-c','--n-motions', default=3, type=int, metavar='N',
+                    help='number of independent motions')
 
 def main():
     args = parser.parse_args()
 
+    if args.arch=='ecn':
 
-    disp_net = models.ECN_Disp(input_size=args.img_height,init_planes=args.n_channel,scale_factor=args.scale_factor,growth_rate=args.growth_rate,final_map_size=args.final_map_size,norm_type=args.norm_type).cuda()
+        disp_net = models.ECN_Disp(input_size=args.img_height,init_planes=args.n_channel,scale_factor=args.scale_factor,growth_rate=args.growth_rate,final_map_size=args.final_map_size,norm_type=args.norm_type).cuda()
+    else:
+        disp_net = models.DispNetS().cuda()
 
     weights = torch.load(args.pretrained_dispnet)
     disp_net.load_state_dict(weights['state_dict'])
     disp_net.eval()
 
     if args.pretrained_posenet:
-
-        if args.pixelpose:
-            pose_net = models.ECN_PixelPose(input_size=args.img_height, nb_ref_imgs=args.sequence_length - 1,
-                                       init_planes=args.n_channel // 2, scale_factor=args.scale_factor,
-                                       growth_rate=args.growth_rate // 2, final_map_size=args.final_map_size,
-                                       norm_type=args.norm_type).cuda()
-
-        else:
-            pose_net = models.ECN_Pose(input_size=args.img_height, nb_ref_imgs=args.sequence_length - 1,
+        if args.arch=='ecn':
+            if args.pixelpose:
+                pose_net = models.ECN_PixelPose(input_size=args.img_height, nb_ref_imgs=args.sequence_length - 1,
                                            init_planes=args.n_channel // 2, scale_factor=args.scale_factor,
                                            growth_rate=args.growth_rate // 2, final_map_size=args.final_map_size,
                                            norm_type=args.norm_type).cuda()
+
+            else:
+                pose_net = models.ECN_Pose(input_size=args.img_height, nb_ref_imgs=args.sequence_length - 1,
+                                               init_planes=args.n_channel // 2, scale_factor=args.scale_factor,
+                                               growth_rate=args.growth_rate // 2, final_map_size=args.final_map_size,
+                                               norm_type=args.norm_type,n_motions=args.n_motions).cuda()
+        else:
+            pose_net = models.PoseExpNet(nb_ref_imgs=args.sequence_length - 1).cuda()
 
         weights = torch.load(args.pretrained_posenet)
         pose_net.load_state_dict(weights['state_dict'])
@@ -83,7 +88,14 @@ def main():
     import time
 
     scene=os.path.join(args.dataset_dir)
-    intrinsics = np.genfromtxt(dataset_dir / 'calib.txt',max_rows=3).astype(np.float32).reshape((3, 3))
+
+    f = open(os.path.join(dataset_dir, 'calib.txt'), 'r')
+    line = f.readline()
+    l = [float(num) for num in line.split()]
+    intrinsics = np.asarray([[l[1], 0, l[3]], [0, l[0], l[2]], [0, 0, 1]]).astype(np.float32)
+    distortion = np.asarray(l[4:]).astype(np.float32)
+
+    #intrinsics = np.genfromtxt(dataset_dir / 'calib.txt',max_rows=3).astype(np.float32).reshape((3, 3))
 
     intrinsics_inv = np.linalg.inv(intrinsics)
 
@@ -105,8 +117,8 @@ def main():
     shifts.pop(demi_length)
 
     #for i in range(demi_length,len(imgs)-demi_length):
-    #for i in range(round(len(imgs)*.9), len(imgs) - demi_length):
-    for i in range(demi_length, round(len(imgs)*0.1 - demi_length)):
+    for i in range(round(len(imgs)*.9), len(imgs) - demi_length):
+    #for i in range(demi_length, round(len(imgs)*0.1 - demi_length)):
 
         file =File()
         file.namebase=os.path.basename(imgs[i]).replace('.png','')

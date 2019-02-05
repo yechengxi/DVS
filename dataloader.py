@@ -141,8 +141,9 @@ class ImageSequenceFolder(data.Dataset):
 
         for id, scene in enumerate(self.scenes):
             f = open(os.path.join(scene, 'calib.txt'), 'r')
-            import re
+
             """
+            import re
             non_decimal = re.compile(r'[^\d. ]+')
             l = [[float(num) for num in non_decimal.sub('', line).split()] for line in f]
             intrinsics = np.asarray(l[:3]).astype(np.float32)

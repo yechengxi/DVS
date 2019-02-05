@@ -161,3 +161,40 @@ CUDA_VISIBLE_DEVICES=0,1,2,3 python main.py $data_dir  -j 16 -d0.5  --batch-size
 
 
 CUDA_VISIBLE_DEVICES=0,1,2,3 python main.py $data_dir -d0.5  --batch-size 32 -f 100 --lr 1e-3 --sequence-length 5 --log-output --with-gt  --epochs 50 --norm-type fd >noslice_ecn_fd.log&
+
+
+data_dir=/home/cxy/Data/DVS/EV-IMO-learning-1/SET1_CUBE_CAR_PLANE
+dispnet_dir=pretrained/imo/ecn_fd/dispnet_model_best.pth.tar
+posenet_dir=pretrained/imo/ecn_fd/exp_pose_model_best.pth.tar
+output_dir=/home/cxy/SET1_CUBE_CAR_PLANE_ecn_output_fd
+
+CUDA_VISIBLE_DEVICES=0 python run_inference.py --img-height 260 --img-width 346 --final-map-size 4  --dataset-dir $data_dir --pretrained-dispnet $dispnet_dir --pretrained-posenet $posenet_dir --sequence-length 5 --output-dir $output_dir 
+
+
+
+
+data_dir=/home/cxy/Data/DVS/EV-IMO-learning-1/SET1_CUBE_CAR_PLANE
+dispnet_dir=pretrained/imo/std/dispnet_model_best.pth.tar
+posenet_dir=pretrained/imo/std/exp_pose_model_best.pth.tar
+output_dir=/home/cxy/SET1_CUBE_CAR_PLANE_std_output_fd
+
+CUDA_VISIBLE_DEVICES=0 python run_inference.py --img-height 260 --img-width 346 --arch std --dataset-dir $data_dir --pretrained-dispnet $dispnet_dir --pretrained-posenet $posenet_dir --sequence-length 5 --output-dir $output_dir 
+
+
+
+
+
+data_dir=/home/cxy/Data/DVS/EV-IMO-learning-1/SET1_CUBE_CAR_PLANE
+dispnet_dir=pretrained/imo/ecn_tiny/dispnet_model_best.pth.tar
+posenet_dir=pretrained/imo/ecn_tiny/exp_pose_model_best.pth.tar
+output_dir=/home/cxy/SET1_CUBE_CAR_PLANE_ecn_tiny_output_fd
+
+CUDA_VISIBLE_DEVICES=0 python run_inference.py --img-height 260 --img-width 346 --final-map-size 8  --dataset-dir $data_dir --pretrained-dispnet $dispnet_dir --pretrained-posenet $posenet_dir --sequence-length 5 --output-dir $output_dir --n-channel 8 --growth-rate 8 
+
+
+data_dir=/home/cxy/Data/DVS/EV-IMO-learning-1/SET1_WALL_SIMPLE_CAR
+dispnet_dir= pretrained/imo/ecn_gn/dispnet_model_best.pth.tar
+posenet_dir=pretrained/imo/ecn_gn/exp_pose_model_best.pth.tar 
+output_dir=/home/cxy/SET1_WALL_SIMPLE_CAR_ecn_output_gn
+
+CUDA_VISIBLE_DEVICES=0 python run_inference.py --img-height 260 --img-width 346 --final-map-size 4  --dataset-dir $data_dir --pretrained-dispnet $dispnet_dir --pretrained-posenet $posenet_dir --sequence-length 5 --output-dir $output_dir --norm-type gn
