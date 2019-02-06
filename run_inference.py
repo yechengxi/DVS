@@ -116,8 +116,8 @@ def main():
     shifts = list(range(-demi_length, demi_length + 1))
     shifts.pop(demi_length)
 
-    #for i in range(demi_length,len(imgs)-demi_length):
-    for i in range(round(len(imgs)*.9), len(imgs) - demi_length):
+    for i in range(demi_length,len(imgs)-demi_length):
+    #for i in range(round(len(imgs)*.9), len(imgs) - demi_length):
     #for i in range(demi_length, round(len(imgs)*0.1 - demi_length)):
 
         file =File()
