@@ -5,7 +5,9 @@ import numpy as np
 from path import Path
 import argparse
 
-from models.ECN_old import *
+#from models.ECN_old import *
+from models.ECN import *
+
 from utils import tensor2array
 
 from inverse_warp import *
@@ -66,9 +68,11 @@ def main():
             pose_net = ECN_Pose(input_size=args.img_height, nb_ref_imgs=args.sequence_length - 1,
                                            init_planes=args.n_channel // 2, scale_factor=args.scale_factor,
                                            growth_rate=args.growth_rate // 2, final_map_size=args.final_map_size,
-                                           output_exp=True, output_exp2=True,
-                                           output_pixel_pose=True,
-                                           output_disp=args.multi, norm_type=args.norm_type).cuda()
+                                           output_exp=True,
+                                           #output_exp2=True,
+                                           #output_pixel_pose=True,
+                                           #output_disp=args.multi,
+                                           norm_type=args.norm_type).cuda()
         else:
             pose_net = models.PoseExpNet(nb_ref_imgs=args.sequence_length - 1, output_exp=True,
                                              output_pixel_pose=False, output_disp=False).cuda()
@@ -111,8 +115,8 @@ def main():
     shifts.pop(demi_length)
 
 
-    #for i in range(demi_length,len(imgs)-demi_length):
-    for i in range(1153,1154):
+    for i in range(demi_length,len(imgs)-demi_length):
+    #for i in range(828,829):
 
         file =File()
         file.namebase=os.path.basename(imgs[i]).replace('.jpg','')
@@ -141,13 +145,14 @@ def main():
             ref_imgs = [(im / 255 ).cuda() for im in ref_imgs]
 
 
-            msg='encode'
-            output_s= disp_net(img,msg)#,raw_disp
+            msg=None
+            output_s= disp_net(img,msg)#,msg#,raw_disp
 
             output_depth = 1 / output_s
 
             if args.pretrained_posenet is not None:
-                explainability_mask, explainability_mask2, pixel_pose, output_m, pose= pose_net(img, ref_imgs)#,raw_disp
+                #explainability_mask, explainability_mask2, pixel_pose, output_m, pose= pose_net(img, ref_imgs)#,raw_disp
+                explainability_mask, pose = pose_net(img,ref_imgs)  # ,raw_disp
 
                 if args.arch=='ecn':
                     _, ego_flow = get_new_grid(output_depth[0], pose[:,int((args.sequence_length-1)/2)], intrinsics, intrinsics_inv)

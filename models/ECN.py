@@ -5,6 +5,7 @@ import torch.nn.functional as F
 import numpy as np
 
 from .normalization import *
+from .visualization import *
 
 class SingleConvBlock(nn.Module):
     # basic convolution block v1
@@ -113,7 +114,6 @@ class CascadeLayer(nn.Module):
         self.scale_factor = scale_factor
         self.ConvBlock = DoubleConvBlock(in_planes, out_planes, kernel_size, int((kernel_size - 1) / 2),
                                          norm_type=norm_type)
-        #self.ConvBlock=RecurrentConvBlockC(in_planes, out_planes, kernel_size, int((kernel_size - 1) / 2),dropout_rate=dropout_rate,norm_type=norm_type,n_iter=n_iter)
     def forward(self, x, output_size=None):
 
         out = self.ConvBlock(x)
@@ -132,8 +132,6 @@ class InvertedCascadeLayer(nn.Module):
         self.ConvBlock1 = SingleConvBlock(in_planes, out_planes, kernel_size, padding, norm_type=norm_type)
         self.ConvBlock2 = SingleConvBlock(in_planes2 + out_planes, out_planes, kernel_size, padding,
                                           norm_type=norm_type)
-        #self.ConvBlock1 = RecurrentConvBlockC(in_planes, out_planes, kernel_size, int((kernel_size - 1) / 2),dropout_rate=dropout_rate,norm_type=norm_type,n_iter=n_iter)
-        #self.ConvBlock2 = RecurrentConvBlockC(in_planes2 + out_planes, out_planes, kernel_size, int((kernel_size - 1) / 2),dropout_rate=dropout_rate,norm_type=norm_type,n_iter=n_iter)
 
     def forward(self, x, x2):
         x = scaling(x, output_size=x2.shape)
@@ -217,14 +215,17 @@ class ECN_Disp(nn.Module):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
             elif isinstance(m, nn.BatchNorm2d):
-                nn.init.constant_(m.weight, 1)
-                nn.init.constant_(m.bias, 0)
+                try:
+                    nn.init.constant_(m.weight, 1)
+                    nn.init.constant_(m.bias, 0)
+                except:
+                    pass
             elif isinstance(m, nn.Linear):
                 nn.init.xavier_uniform_(m.weight)
                 if m.bias is not None:
                     nn.init.constant_(m.bias, 0)
 
-    def forward(self, input):
+    def forward(self, input,msg=None):
 
         b, _, h, w = input.shape
         encode = [input]
@@ -243,13 +244,11 @@ class ECN_Disp(nn.Module):
             j = len(self.decoding_layers) - i
             if j <= self.predicts:
                 pred = self.predict_maps[j - 1](decode[-1])
-                #print(i,'p',pred.min().item(),pred.mean().item(),pred.max().item())
 
                 predicts.append(pred)
 
                 if len(predicts) > 1:
                     predicts[-1] = predicts[-1] + scaling(predicts[-2],output_size=predicts[-1].shape)  # residual learning
-                #decode[-1] = torch.cat([decode[-1][:, :self.pred_planes] + predicts[-1], decode[-1][:, self.pred_planes:]],dim=1)  # residual learning
                 decode[-1] = torch.cat([decode[-1][:, :self.pred_planes] + predicts[-1], decode[-1][:, self.pred_planes:]],dim=1)  # residual learning
 
         predicts.reverse()
@@ -259,6 +258,13 @@ class ECN_Disp(nn.Module):
 
         disp_predicts = [self.alpha * torch.sigmoid(predicts[i]) + self.beta for i in range(self.predicts)]
 
+        if msg is not None:
+            msg = 'encode'
+            visualize_all_maps(encode, msg)
+            msg = 'decode'
+            for i in range(self.predicts):
+                decode[-1 - i][:, :self.pred_planes] = disp_predicts[i]
+            visualize_all_maps(decode[::-1], msg)
         if self.training:
             return disp_predicts
         else:
