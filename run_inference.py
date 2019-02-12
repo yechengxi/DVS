@@ -7,6 +7,8 @@ import argparse
 
 #from models.ECN_old import *
 from models.ECN import *
+from models.DispNetS import *
+from models.PoseExpNet import *
 
 from utils import tensor2array
 
@@ -56,7 +58,7 @@ def main():
     if args.arch=='ecn':
         disp_net = ECN_Disp(input_size=args.img_height,init_planes=args.n_channel,scale_factor=args.scale_factor,growth_rate=args.growth_rate,final_map_size=args.final_map_size,norm_type=args.norm_type).cuda()
     else:
-        disp_net = models.DispNetS().cuda()
+        disp_net = DispNetS().cuda()
 
     weights = torch.load(args.pretrained_dispnet)
     disp_net.load_state_dict(weights['state_dict'])
@@ -74,7 +76,7 @@ def main():
                                            #output_disp=args.multi,
                                            norm_type=args.norm_type).cuda()
         else:
-            pose_net = models.PoseExpNet(nb_ref_imgs=args.sequence_length - 1, output_exp=True,
+            pose_net = PoseExpNet(nb_ref_imgs=args.sequence_length - 1, output_exp=True,
                                              output_pixel_pose=False, output_disp=False).cuda()
 
 
@@ -146,13 +148,18 @@ def main():
 
 
             msg=None
-            output_s= disp_net(img,msg)#,msg#,raw_disp
+            if args.arch=='ecn':
+                output_s= disp_net(img,msg)#,msg#,raw_disp
+            else:
+                output_s = disp_net(img)
 
             output_depth = 1 / output_s
 
             if args.pretrained_posenet is not None:
-                #explainability_mask, explainability_mask2, pixel_pose, output_m, pose= pose_net(img, ref_imgs)#,raw_disp
-                explainability_mask, pose = pose_net(img,ref_imgs)  # ,raw_disp
+                if args.arch=='ecn':
+                    explainability_mask, pose = pose_net(img, ref_imgs)  # ,raw_disp
+                else:
+                    explainability_mask, explainability_mask2, pixel_pose, output_m, pose= pose_net(img, ref_imgs)#,raw_disp
 
                 if args.arch=='ecn':
                     _, ego_flow = get_new_grid(output_depth[0], pose[:,int((args.sequence_length-1)/2)], intrinsics, intrinsics_inv)
