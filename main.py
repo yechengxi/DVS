@@ -40,7 +40,7 @@ parser.add_argument('--padding-mode', type=str, choices=['zeros', 'border'], def
 parser.add_argument('--with-gt', action='store_true', help='use ground truth for validation. \
                     You need to store it in npy 2D arrays see data/kitti_raw_loader.py for an example')
 
-parser.add_argument('-j', '--workers', default=8, type=int, metavar='N',
+parser.add_argument('-j', '--workers', default=16, type=int, metavar='N',
                     help='number of data loading workers')
 parser.add_argument('--epochs', default=20, type=int, metavar='N',
                     help='number of total epochs to run')
@@ -102,7 +102,7 @@ parser.add_argument('--n-channel', '--init-channel', default=32, type=int,
 parser.add_argument('--growth-rate', default=32, type=int, help='feature channel growth rate.')
 parser.add_argument('--scale-factor', default=1. / 2.,
                     type=float, help='scaling factor of each layer(0.5|0.75|0.875)')
-parser.add_argument('--final-map-size', default=1, type=int, help='final map size')
+parser.add_argument('--final-map-size', default=4, type=int, help='final map size')
 
 parser.add_argument("--dataset-dir", default='.', type=str, help="Dataset directory")
 parser.add_argument("--dataset-list", default=None, type=str, help="Dataset list file")

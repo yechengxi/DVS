@@ -17,7 +17,7 @@ def save_path_formatter(args, parser):
     keys_with_prefix['sequence_length'] = 'seq'
     keys_with_prefix['batch_size'] = 'b'
     keys_with_prefix['lr_scheduler'] = ''
-    keys_with_prefix['norm-type'] = ''
+    keys_with_prefix['norm_type'] = ''
     keys_with_prefix['optimizer'] = ''
     keys_with_prefix['lr'] = 'lr'
     keys_with_prefix['mask_loss_weight'] = 'm'
