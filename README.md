@@ -248,10 +248,19 @@ data_dir=/vulcan/scratch/anton
  
  
 data_dir=/vulcan/scratch/anton/EV-IMO-learning-2/SET3_O1O2O3/
-dispnet_dir=pretrained/imo2/no_imo/dispnet_model_best.pth.tar
-posenet_dir=pretrained/imo2/no_imo/exp_pose_model_best.pth.tar 
-output_dir=/vulcan/scratch/cxy/SET3_O1O2O3_ecn_output_no_imo
+dispnet_dir=pretrained/full/dispnet_model_best.pth.tar
+posenet_dir=pretrained/full/exp_pose_model_best.pth.tar 
+output_dir=/vulcan/scratch/cxy/SET3_O1O2O3_ecn_output_full
 
 CUDA_VISIBLE_DEVICES=0 python run_inference.py --img-height 260 --img-width 346 --final-map-size 4  --n-motions 1 --dataset-dir $data_dir --pretrained-dispnet $dispnet_dir --pretrained-posenet $posenet_dir --sequence-length 5 --output-dir $output_dir --norm-type fd
 
 
+CUDA_VISIBLE_DEVICES=0 python run_inference.py --img-height 260 --img-width 346 --final-map-size 4  --dataset-dir $data_dir --pretrained-dispnet $dispnet_dir --pretrained-posenet $posenet_dir --sequence-length 3 --output-dir $output_dir --norm-type fd
+
+
+
+
+
+data_dir=/vulcan/scratch/anton
+
+CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 python main.py $data_dir -j32 -d0.5  --batch-size 96 -f 100 --lr 1e-2 --sequence-length 5 --log-output --with-gt  --epochs 20 --norm-type fd --pretrained-dispnet pretrained/full/dispnet_checkpoint.pth.tar --pretrained-posenet pretrained/full/exp_pose_checkpoint.pth.tar >ecn_fd_full.log &
