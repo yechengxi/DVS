@@ -26,7 +26,6 @@ parser.add_argument("--pretrained-posenet", default=None, type=str, help="pretra
 parser.add_argument("--img-height", default=200, type=int, help="Image height")
 parser.add_argument("--img-width", default=346, type=int, help="Image width")
 parser.add_argument("--no-resize", action='store_true', help="no resizing is done")
-parser.add_argument("--multi", action='store_true', help="multi image depth")
 parser.add_argument('--sequence-length', type=int, metavar='N', help='sequence length for training', default=3)
 
 parser.add_argument("--dataset-list", default=None, type=str, help="Dataset list file")
@@ -37,7 +36,7 @@ parser.add_argument("--img-exts", default=['png', 'jpg', 'bmp'], nargs='*', type
 
 
 parser.add_argument('--arch', default='ecn', help='architecture')
-parser.add_argument('--norm-type', default='gn', help='normalization type')
+parser.add_argument('--norm-type', default='fd', help='normalization type')
 
 parser.add_argument('--n-channel', '--init-channel', default=32, type=int,
                     help='initial feature channels(32|64|128).')
@@ -50,10 +49,6 @@ parser.add_argument('--final-map-size', default=4, type=int, help='final map siz
 
 def main():
     args = parser.parse_args()
-    if not(args.output_disp or args.output_depth):
-        print('You must at least output one value !')
-        return
-
 
     if args.arch=='ecn':
         disp_net = ECN_Disp(input_size=args.img_height,init_planes=args.n_channel,scale_factor=args.scale_factor,growth_rate=args.growth_rate,final_map_size=args.final_map_size,norm_type=args.norm_type).cuda()
@@ -148,6 +143,7 @@ def main():
 
 
             msg=None
+            #msg = 'test'
             if args.arch=='ecn':
                 output_s= disp_net(img,msg)#,msg#,raw_disp
             else:
@@ -167,6 +163,9 @@ def main():
                     _, ego_flow = inverse_warp(ref_imgs[int((args.sequence_length-1)/2)], output_depth[:, 0], pose[:,int((args.sequence_length-1)/2)], intrinsics,
                                                intrinsics_inv, 'euler', 'border')
 
+                np.save(output_dir / 'ego_pose_{}{}'.format(file.namebase, '.npy'),pose[0,(args.sequence_length-1)//2].cpu().data.numpy())
+
+
                 ego_flow=ego_flow[0].data.cpu().numpy()
                 write_flow(ego_flow,output_dir / 'ego_flow_{}{}'.format(file.namebase, '.flo'))
                 #tmp=read_flow(output_dir / 'ego_flow_{}{}'.format(file.namebase, '.flo'))
@@ -177,15 +176,14 @@ def main():
             output_s=output_s[0].cpu()
             output_depth=output_depth[0,0].cpu()
 
-            if args.output_disp:
-                disp = (255*tensor2array(output_s, max_value=None, colormap='bone')).astype(np.uint8).transpose((1,2,0))
-                imsave(output_dir/'disp_{}{}'.format(file.namebase,file.ext), disp)
-                np.save(output_dir/'depth_{}{}'.format(file.namebase,'.npy'),output_depth.data.numpy())
-                if args.pretrained_posenet is not None:
-                    cat_im=np.concatenate((img0,disp,ego_flow),axis=1)
-                else:
-                    cat_im=np.concatenate((img0,disp),axis=1)
-                imsave(output_dir / 'cat_{}{}'.format(file.namebase, file.ext), cat_im)
+            disp = (255*tensor2array(output_s, max_value=None, colormap='bone')).astype(np.uint8).transpose((1,2,0))
+            imsave(output_dir/'disp_{}{}'.format(file.namebase,file.ext), disp)
+            np.save(output_dir/'depth_{}{}'.format(file.namebase,'.npy'),output_depth.data.numpy())
+            if args.pretrained_posenet is not None:
+                cat_im=np.concatenate((img0,disp,ego_flow),axis=1)
+            else:
+                cat_im=np.concatenate((img0,disp),axis=1)
+            imsave(output_dir / 'cat_{}{}'.format(file.namebase, file.ext), cat_im)
 
 
 if __name__ == '__main__':
