@@ -145,11 +145,16 @@ def main():
             msg=None
             #msg = 'test'
             if args.arch=='ecn':
-                output_s= disp_net(img,msg)#,msg#,raw_disp
+                output= disp_net(img,msg)#,msg#,raw_disp
             else:
-                output_s = disp_net(img)
+                output = disp_net(img)
 
-            output_depth = 1 / output_s
+            # normalize the depth
+            b = 1
+            mean_disp = output[0].view(b, -1).mean(-1).view(b, 1, 1, 1)*0.1
+            output = output/ mean_disp
+
+            output_depth = 1 / output
 
             if args.pretrained_posenet is not None:
                 if args.arch=='ecn':
@@ -173,10 +178,10 @@ def main():
                 imsave(output_dir / 'ego_flow_{}{}'.format(file.namebase, file.ext), ego_flow)
 
 
-            output_s=output_s[0].cpu()
+            output=output[0].cpu()
             output_depth=output_depth[0,0].cpu()
 
-            disp = (255*tensor2array(output_s, max_value=None, colormap='bone')).astype(np.uint8).transpose((1,2,0))
+            disp = (255*tensor2array(output, max_value=None, colormap='bone')).astype(np.uint8).transpose((1,2,0))
             imsave(output_dir/'disp_{}{}'.format(file.namebase,file.ext), disp)
             np.save(output_dir/'depth_{}{}'.format(file.namebase,'.npy'),output_depth.data.numpy())
             if args.pretrained_posenet is not None:

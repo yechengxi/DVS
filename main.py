@@ -320,7 +320,7 @@ def train(args, train_loader, disp_net, pose_exp_net, optimizer, epoch_size,  tr
     batch_time = AverageMeter()
     data_time = AverageMeter()
     losses = AverageMeter(precision=4)
-    w1, w2, w3 ,w4, w5, w6 = args.photo_loss_weight, args.mask_loss_weight, args.smooth_loss_weight,args.pose_smooth_loss_weight,args.flow_smooth_loss_weight,args.consistency_loss_weight
+    w1, w2, w3 ,w4, w5, w6 = args.photo_loss_weight, args.mask_loss_weight, args.smooth_loss_weight,0.,args.flow_smooth_loss_weight,0.
 
     loss,loss_1,loss_2,loss_3,loss_4,loss_5,loss_6=0,0,0,0,0,0,0
     # switch to train mode
@@ -347,7 +347,7 @@ def train(args, train_loader, disp_net, pose_exp_net, optimizer, epoch_size,  tr
 
         # normalize the depth
         b = tgt_img.shape[0]
-        mean_disp = disparities[0].view(b, -1).mean(-1).view(b, 1, 1, 1) * 0.1
+        mean_disp = disparities[0].view(b, -1).mean(-1).view(b, 1, 1, 1)*0.1
         disparities = [disp / mean_disp for disp in disparities]
         depth = [1 / disp for disp in disparities]
 
