@@ -140,10 +140,12 @@ class smooth_loss(nn.Module):
             pred_map = [pred_map]
 
         loss = 0
-        weight = 1.
+        weight =0
 
         for scaled_map in pred_map:
-            N = scaled_map.shape[0]
+            N,C,H,W = scaled_map.shape
+            if min(H,W)<4:
+                continue
             dx, dy = gradient(scaled_map)
             dx2, dxdy = gradient(dx)
             dydx, dy2 = gradient(dy)
@@ -151,12 +153,11 @@ class smooth_loss(nn.Module):
             loss += (torch.pow(torch.clamp(dx2.abs(), min=eps),p).view(N, -1).mean(1)
                      + torch.pow(torch.clamp(dxdy.abs(), min=eps),p).view(N, -1).mean(1)
                         + torch.pow(torch.clamp(dydx.abs(), min=eps),p).view(N, -1).mean(1)
-                           + torch.pow(torch.clamp(dy2.abs(), min=eps),p).view(N, -1).mean(1)) * weight
+                           + torch.pow(torch.clamp(dy2.abs(), min=eps),p).view(N, -1).mean(1)) * H*W
 
-            weight /= 2.3 # don't ask me why it works better
+            weight += H*W
 
-        return loss
-
+        return loss/weight
 
 
 class non_local_smooth_loss(nn.Module):
@@ -173,10 +174,10 @@ class non_local_smooth_loss(nn.Module):
             pred_map = [pred_map]
 
         loss = 0
-        weight = 1.
+        weight =0
 
         for scaled_map in pred_map:
-            N = scaled_map.shape[0]
+            N,C,H,W = scaled_map.shape
             dx, dy = gradient(scaled_map)
             dx2, dxdy = gradient(dx)
             dydx, dy2 = gradient(dy)
@@ -184,36 +185,11 @@ class non_local_smooth_loss(nn.Module):
             #loss += JointSmoothnessLoss(dx2,dx2).view(N, -1).mean(1)+JointSmoothnessLoss(dxdy,dxdy).view(N, -1).mean(1)+JointSmoothnessLoss(dy2,dy2).view(N, -1).mean(1)+JointSmoothnessLoss(dydx,dydx).view(N, -1).mean(1)
             dd=torch.cat((dx2[:,:,1:-1,:],dy2[:,:,:,1:-1],dxdy[:,:,:-1,:-1],dydx[:,:,:-1,:-1]),dim=1)
             loss+=NonLocalSmoothnessLoss(dd,p=0.8,eps=1e-4, R=0.1, B=10)
-            weight /= 2.3 # don't ask me why it works better
+            weight += H*W
 
-        return loss
-
-
+        return loss/weight
 
 
-def pose_smooth_loss(pred_map,pose_ego):
-    def gradient(pred):
-        D_dy = pred[:, :, 1:] - pred[:, :, :-1]
-        D_dx = pred[:, :, :, 1:] - pred[:, :, :, :-1]
-        return D_dx, D_dy
-
-    if type(pred_map) not in [tuple, list]:
-        pred_map = [pred_map]
-
-    loss = 0
-    weight = 1
-    for scaled_map in pred_map:
-        N, _, H, W = scaled_map.shape
-        if H > 3 and W > 3:
-            scaled_map=scaled_map-pose_ego.view(N,-1,1,1)
-            dx, dy = gradient(scaled_map)
-            dx2, dxdy = gradient(dx)
-            dydx, dy2 = gradient(dy)
-            loss += (dx2.abs().view(N, -1).mean(1) + dxdy.abs().view(N, -1).mean(1) + dydx.abs().view(N, -1).mean(
-                1) + dy2.abs().view(N, -1).mean(1)) * weight
-
-            weight /= 2.3 # don't ask me why it works better
-    return loss
 
 
 
