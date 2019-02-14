@@ -340,9 +340,16 @@ def train(args, train_loader, disp_net, pose_exp_net, optimizer, epoch_size,  tr
 
         # compute output
         disparities = disp_net(tgt_img_var)
-        depth = [1/disp for disp in disparities]
+
+
         explainability_mask, pose = pose_exp_net(tgt_img_var, ref_imgs_var)
         ego_flows=None
+
+        # normalize the depth
+        b = tgt_img.shape[0]
+        mean_disp = disparities[0].view(b, -1).mean(-1).view(b, 1, 1, 1) * 0.1
+        disparities = [disp / mean_disp for disp in disparities]
+        depth = [1 / disp for disp in disparities]
 
         if not args.simple:
             loss_1,ego_flows = args.photometric_reconstruction_loss(tgt_img_var, ref_imgs_var,
@@ -350,7 +357,7 @@ def train(args, train_loader, disp_net, pose_exp_net, optimizer, epoch_size,  tr
                                                      depth, explainability_mask, pose,
                                                      args.rotation_mode, args.padding_mode)
         else:
-            loss_1,ego_flows = args.simple_photometric_reconstruction_loss(tgt_img_var, ref_imgs_var,
+            loss_1,warped_refs,ego_flows = args.simple_photometric_reconstruction_loss(tgt_img_var, ref_imgs_var,
                                                                  intrinsics_var, intrinsics_inv_var,
                                                                  depth, explainability_mask, pose,
                                                                  args.ssim_weight, args.padding_mode)
