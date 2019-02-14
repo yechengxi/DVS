@@ -20,7 +20,7 @@ from utils import *
 
 from inverse_warp import inverse_warp,simple_inverse_warp
 
-from loss_functions import photometric_reconstruction_loss,simple_photometric_reconstruction_loss,two_stage_photometric_reconstruction_loss, explainability_loss, smooth_loss,non_local_smooth_loss, compute_errors,pose_smooth_loss,ssim,msssim
+from loss_functions import *
 from logger import AverageMeter
 from itertools import chain
 from tensorboardX import SummaryWriter
@@ -224,9 +224,6 @@ def main():
     args.simple_photometric_reconstruction_loss = simple_photometric_reconstruction_loss().cuda()
     args.simple_photometric_reconstruction_loss = torch.nn.DataParallel(args.simple_photometric_reconstruction_loss)
 
-
-    args.two_stage_photometric_reconstruction_loss = two_stage_photometric_reconstruction_loss().cuda()
-    args.two_stage_photometric_reconstruction_loss = torch.nn.DataParallel(args.two_stage_photometric_reconstruction_loss)
 
     args.smooth_loss=smooth_loss().cuda()
     args.smooth_loss = torch.nn.DataParallel(args.smooth_loss)
