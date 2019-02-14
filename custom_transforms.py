@@ -2,7 +2,7 @@ from __future__ import division
 import torch
 import random
 import numpy as np
-from scipy.misc import imresize
+from cv2 import resize
 from scipy.ndimage.interpolation import zoom
 '''Set of tranform random routines that takes list of inputs as arguments,
 in order to have random but coherent transformations.'''
@@ -40,8 +40,9 @@ class ArrayToTensor(object):
         tensors = []
         for im in images:
             # put it from HWC to CHW format
+            if len(im.shape)==2:
+                im = np.expand_dims(im, axis=2)
             im = np.transpose(im, (2, 0, 1))
-            # handle numpy array
             tensors.append(torch.from_numpy(im).float()/255)
         return tensors, intrinsics
 
@@ -73,20 +74,13 @@ class RandomScaleCrop(object):
         assert intrinsics is not None
         output_intrinsics = np.copy(intrinsics)
 
-        in_h, in_w,in_c = images[0].shape
-        x_scaling, y_scaling = np.random.uniform(1,1.15,2)
+        in_h, in_w = images[0].shape[:2]
+        x_scaling, y_scaling = np.random.uniform(1.0,1.35,2)
         scaled_h, scaled_w = int(in_h * y_scaling), int(in_w * x_scaling)
 
         output_intrinsics[0] *= x_scaling
         output_intrinsics[1] *= y_scaling
-        scaled_images=[]
-        for im in images:
-            chs=[]
-            for c in range(im.shape[2]):
-                chs.append(imresize(im[:,:,c], (scaled_h, scaled_w)))
-            scaled_images.append(np.stack(chs,axis=2))
-
-        #scaled_images = [imresize(im, (scaled_h, scaled_w)) for c  for im in images]
+        scaled_images = [resize(im, (scaled_w,scaled_h)) for im in images]
         offset_y = np.random.randint(scaled_h - in_h + 1)
         offset_x = np.random.randint(scaled_w - in_w + 1)
         cropped_images = [im[offset_y:offset_y + in_h, offset_x:offset_x + in_w] for im in scaled_images]

@@ -6,7 +6,7 @@ import cv2
 import os, sys, signal, glob, time
 
 # The dvs-related stuff, implemented in C. 
-sys.path.insert(0, './build/lib.linux-x86_64-3.6') #The libdvs.so should be in PYTHONPATH!
+sys.path.insert(0, './pydvs/build/lib.linux-x86_64-3.6') #The libdvs.so should be in PYTHONPATH!
 import libdvs
 
 global_scale_t = 20 * 255
