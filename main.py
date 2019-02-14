@@ -44,7 +44,7 @@ parser.add_argument('--with-gt', action='store_true', help='use ground truth for
                     You need to store it in npy 2D arrays see data/kitti_raw_loader.py for an example')
 
 
-parser.add_argument('-j', '--workers', default=8, type=int, metavar='N',
+parser.add_argument('-j', '--workers', default=16, type=int, metavar='N',
                     help='number of data loading workers')
 parser.add_argument('--epochs', default=20, type=int, metavar='N',
                     help='number of total epochs to run')
@@ -104,7 +104,7 @@ parser.add_argument('--n-channel', '--init-channel', default=32, type=int,
 parser.add_argument('--growth-rate', default=32, type=int, help='feature channel growth rate.')
 parser.add_argument('--scale-factor', default=1. / 2.,
                     type=float, help='scaling factor of each layer(0.5|0.75|0.875)')
-parser.add_argument('--final-map-size', default=1, type=int, help='final map size')
+parser.add_argument('--final-map-size', default=4, type=int, help='final map size')
 
 parser.add_argument("--dataset-dir", default='.', type=str, help="Dataset directory")
 parser.add_argument("--dataset-list", default=None, type=str, help="Dataset list file")
@@ -132,17 +132,17 @@ def main():
             output_writers.append(SummaryWriter(args.save_path/'valid'/str(i)))
 
     # Data loading code
-    normalize = custom_transforms.Normalize(mean=[0., 0., 0.],std=[1.,1.,1.])
+    #normalize = custom_transforms.Normalize(mean=[0., 0., 0.],std=[1.,1.,1.])
 
     train_transform = custom_transforms.Compose([
         custom_transforms.RandomHorizontalFlip(),
         custom_transforms.RandomScaleCrop(),
         custom_transforms.ArrayToTensor(),
-        normalize
+        #normalize
     ])
 
     valid_transform = custom_transforms.Compose([custom_transforms.ArrayToTensor(),
-                                                normalize
+                                                #normalize
                                                 ])
 
     print("=> fetching scenes in '{}'".format(args.data))
@@ -369,7 +369,7 @@ def train(args, train_loader, disp_net, pose_exp_net, optimizer, epoch_size,  tr
         if args.sharp:
             pose=pose[:,0:1]
             explainability_mask=[(m[:,:1] if m is not None else m) for m in explainability_mask]
-            loss_1,warped_refs,ego_flows = args.sharpness_loss(slices,
+            loss_1,warped_slices,ego_flows = args.sharpness_loss(slices,
                                                     intrinsics_var, intrinsics_inv_var,
                                                     depth, explainability_mask, pose,
                                                     args.padding_mode)
@@ -432,6 +432,38 @@ def train(args, train_loader, disp_net, pose_exp_net, optimizer, epoch_size,  tr
             if tgt_img.shape[1]==3:
                 train_writer.add_image('train Input', tensor2array(tgt_img[0],max_value=1,colormap='bone'), n_iter)
 
+
+            if args.sharp:
+                for j in range(len(warped_slices[0])):
+                    if j == 0 or j == len(warped_slices[0]) - 1 or j == ((len(warped_slices[0]) - 1) // 2):
+                        train_writer.add_image('warped slice {}'.format(j), tensor2array(warped_slices[0][j][0].data.cpu(), max_value=1, colormap='bone'),n_iter)
+
+                #stack
+
+                stacked_im = 0.
+                counter_im = 0
+
+                for j in range(len(warped_slices[0])):
+                    ref_warped = warped_slices[0][j][0]  # slices[j][0]#
+
+                    event_im = ref_warped[0].abs() + ref_warped[2].abs()
+                    ref_warped[1] = (ref_warped[1]/ args.slices + j / args.slices) * event_im
+
+                    counter_im += event_im
+                    stacked_im = stacked_im + ref_warped
+
+                stacked_im[1][counter_im < 0.99 * 50/args.duration*0.05 / 255.] = 0
+                stacked_im[1] = stacked_im[1] / (counter_im + 1e-3)
+
+                mask = (counter_im > (0.)).type_as(counter_im)  # 4./255*50
+                stacked_im[1] = stacked_im[1] * mask
+                #stacked_im[1]=0
+                train_writer.add_image('train stacked slices',
+                                       tensor2array(stacked_im.abs().data.cpu(), colormap='bone', max_value=None), n_iter)
+
+                train_writer.add_image('train event mask',
+                                       tensor2array(mask.abs().data.cpu(), colormap='bone', max_value=None), n_iter)
+
             for k,scaled_depth in enumerate(depth):
                 train_writer.add_image('train Dispnet Output Normalized {}'.format(k),tensor2array(disparities[k].data[0].cpu(), max_value=None, colormap='bone'),n_iter)
                 b, _, h, w = scaled_depth.size()
@@ -440,52 +472,48 @@ def train(args, train_loader, disp_net, pose_exp_net, optimizer, epoch_size,  tr
 
                 # log warped images along with explainability mask
                 stacked_im = 0.
-                counter_im=0
-                if args.sharp:
-                    middle_slice = warped_refs_scaled[len(warped_refs_scaled)//2][0]
-                else:
-                    tgt_img_scaled = nn.functional.adaptive_avg_pool2d(tgt_img_var, (h, w))
-                    middle_slice = tgt_img_scaled[0]
 
+                tgt_img_scaled = nn.functional.adaptive_avg_pool2d(tgt_img_var, (h, w))
+                middle_slice = tgt_img_scaled[0]
 
                 for j in range(len(warped_refs_scaled)):
-                    #if j<10 or j>=15:
-                    #    continue
-                    ref_warped = warped_refs_scaled[j][0]#slices[j][0]#
-                    ref_warped[1]=ref_warped[1]/5.
-                    event_im=ref_warped[0].abs()+ref_warped[2].abs()
-                    ref_warped[1]=(ref_warped[1]+j/args.slices)*(event_im)
-                    #ref_warped[1] = (ref_warped[1] + (j - 10) / 5) * (event_im)
 
-                    counter_im+=event_im
+                    if j==0:
+                        if explainability_mask[k] is not None:
+                            if args.pixelpose:
+                                mask=explainability_mask[k][0, 0].data.cpu()
+                            else:
+                                mask=1-explainability_mask[k][0, 0].data.cpu()
+                            train_writer.add_image('train Exp mask Outputs {}'.format(k),
+                                                   tensor2array(mask, max_value=1,
+                                                                colormap='bone'), n_iter)
+                    if k==0:
+                        if (explainability_mask[0].shape[1]>=4):
+                            mask=explainability_mask[0][0, 1:4].data.cpu()
+                            train_writer.add_image('train Exp components',
+                                                   tensor2array(mask, max_value=1,
+                                                                colormap='bone'), n_iter)
+
+
+                    ref_warped = warped_refs_scaled[j][0]
                     stacked_im = stacked_im + ref_warped
 
+                    if ego_flows is not None:
+                        final_flow = flow_to_image(ego_flows[k][j][0].data.cpu().numpy()).transpose(2,0,1)
+                        train_writer.add_image('ego flow {} {}'.format(k, j), final_flow / 255, n_iter)
 
-                    if j == 0 or j == len(warped_refs_scaled) - 1:
-                        if explainability_mask[k] is not None:
-                            if not args.sharp or j==0:
-                                train_writer.add_image('train Exp mask Outputs {} {}'.format(k, j),
-                                                       tensor2array(explainability_mask[k][0, j].data.cpu(), max_value=1,
-                                                                    colormap='bone'), n_iter)
-                        if ego_flows is not None:
-                            ego_flow = flow_to_image(ego_flows[k][j][0].data.cpu().numpy()).transpose(2,0,1)
-                            train_writer.add_image('ego flow {} {}'.format(k, j), ego_flow / 255, n_iter)
 
-                        train_writer.add_image('train Warped Outputs {} {}'.format(k, j),
-                                               tensor2array(ref_warped.data.cpu(), colormap='bone', max_value=1), n_iter)
+                    train_writer.add_image('train Warped Outputs {} {}'.format(k, j),
+                                           tensor2array(ref_warped.data.cpu(), colormap='bone', max_value=1), n_iter)
 
-                        train_writer.add_image('train Diff Outputs {} {}'.format(k, j),
-                                               tensor2array((middle_slice - ref_warped).abs().data.cpu(), colormap='bone',
-                                                            max_value=1.), n_iter)
+                    train_writer.add_image('train Diff Outputs {} {}'.format(k, j),
+                                           tensor2array((middle_slice - ref_warped).abs().data.cpu(), colormap='bone',
+                                                        max_value=1.), n_iter)
 
-                stacked_im[1][counter_im<0.99*50/255.]=0
-                stacked_im[1] = stacked_im[1] / (counter_im + 1e-3)
-
-                mask=(counter_im>(0.)).type_as(counter_im)#4./255*50
-                stacked_im[1]=stacked_im[1]*mask
-                #stacked_im=stacked_im[1]
+                stacked_im[1]=0
                 train_writer.add_image('train stacked Outputs {}'.format(k), tensor2array(stacked_im.abs().data.cpu(),colormap='bone',max_value=None), n_iter)
-                train_writer.add_image('train event mask {}'.format(k), tensor2array(mask.abs().data.cpu(),colormap='bone',max_value=None), n_iter)
+
+
 
         # record loss and EPE
         losses.update(loss.item(), args.batch_size)
@@ -562,7 +590,7 @@ def validate_without_gt(args, val_loader, disp_net, pose_exp_net, epoch, output_
             if args.sharp:
                 pose=pose[:, 0:1]
                 explainability_mask = explainability_mask[:,:1]
-                loss_1,warped_refs,ego_flows = args.sharpness_loss(slices,
+                loss_1,warped_slices,ego_flows = args.sharpness_loss(slices,
                                                          intrinsics_var, intrinsics_inv_var,
                                                          depth, explainability_mask, pose,
                                                         args.padding_mode)
@@ -639,17 +667,6 @@ def validate_without_gt(args, val_loader, disp_net, pose_exp_net, epoch, output_
             end = time.time()
     end_time = time.time()
 
-
-    if log_outputs:
-        prefix = 'valid poses'
-        coeffs_names = ['tx', 'ty', 'tz']
-        if args.rotation_mode == 'euler':
-            coeffs_names.extend(['rx', 'ry', 'rz'])
-        elif args.rotation_mode == 'quat':
-            coeffs_names.extend(['qx', 'qy', 'qz'])
-        for i in range(poses.shape[1]):
-            output_writers[0].add_histogram('{} {}'.format(prefix, coeffs_names[i]), poses[:,i], epoch)
-        output_writers[0].add_histogram('disp_values', disp_values, epoch)
 
     msg = 'Evaluation. '
 
@@ -731,7 +748,6 @@ def validate_with_gt(args, val_loader, disp_net, pose_exp_net, epoch, output_wri
             errors_tmp = [e.item() if isinstance(e, torch.Tensor) else e for e in errors_tmp]
             errors_s.update(errors_tmp)
 
-
             # measure elapsed time
             batch_time.update(time.time() - end)
             end = time.time()
@@ -744,7 +760,6 @@ def validate_with_gt(args, val_loader, disp_net, pose_exp_net, epoch, output_wri
         msg += error_names[i]
         msg += ': '
         msg += str(round(errors_s.avg[i], 3))
-
         msg += '; '
 
     msg += ' Elapsed time: '
