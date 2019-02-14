@@ -74,12 +74,11 @@ parser.add_argument('-m', '--mask-loss-weight', type=float, help='weight for exp
 parser.add_argument('--still-loss-weight', type=float, help='weight for still mask loss', metavar='W', default=0.0)
 parser.add_argument('--nls', action='store_true', help='use non-local smoothness')
 parser.add_argument('-s', '--smooth-loss-weight', type=float, help='weight for disparity smoothness loss', metavar='W', default=0.1)
-parser.add_argument('-p','--pose-smooth-loss-weight', type=float, help='weight for pose smoothness loss', metavar='W', default=0.)
-parser.add_argument('-c','--consistency-loss-weight', type=float, help='weight for consistency loss', metavar='W', default=0.0)
+#parser.add_argument('-p','--pose-smooth-loss-weight', type=float, help='weight for pose smoothness loss', metavar='W', default=0.)
+#parser.add_argument('-c','--consistency-loss-weight', type=float, help='weight for consistency loss', metavar='W', default=0.0)
 parser.add_argument('-o','--flow-smooth-loss-weight', type=float, help='weight for optical flow smoothness loss', metavar='W', default=0.0)
 parser.add_argument('--ssim-weight', type=float, help='weight for ssim loss', metavar='W', default=0.)
 
-parser.add_argument('--multi', action='store_true', help='use multiple frames')
 
 parser.add_argument('--log-output', action='store_true', help='will log dispnet outputs and warped imgs at validation step')
 
@@ -191,18 +190,15 @@ def main():
     #disp_net=models.CasNet_Depth(input_size=128,in_planes=3, init_planes=32,growth_rate=32).cuda()
 
     output_exp = args.mask_loss_weight > 0
-    output_exp2=args.pose_smooth_loss_weight>0
     if not output_exp:
         print("=> no mask loss, PoseExpnet will only output pose")
-    output_pixel_pose=args.pose_smooth_loss_weight>0
-    output_disp=args.multi
 
     if args.arch == 'ecn':
         pose_exp_net = models.ECN_Pose(input_size=200*args.scale,#260*args.scale*.5,
                                        nb_ref_imgs=args.sequence_length - 1,init_planes=args.n_channel//2,scale_factor=args.scale_factor,growth_rate=args.growth_rate//2,final_map_size=args.final_map_size,
                                           output_exp=output_exp,norm_type=args.norm_type).cuda()
     else:
-        pose_exp_net = models.PoseExpNet(nb_ref_imgs=args.sequence_length - 1, output_exp=output_exp,output_pixel_pose=output_pixel_pose,output_disp=output_disp).cuda()
+        pose_exp_net = models.PoseExpNet(nb_ref_imgs=args.sequence_length - 1, output_exp=output_exp,output_pixel_pose=False,output_disp=False).cuda()
 
     if args.pretrained_exp_pose:
         print("=> using pre-trained weights for explainabilty and pose net")
@@ -385,7 +381,6 @@ def train(args, train_loader, disp_net, pose_exp_net, optimizer, epoch_size,  tr
         loss_5 = 0
         if w5>0 and ego_flows is not None:
             stacked_ego_flow=[]
-            stacked_rigid_flow=[]
             if ego_flows is not None:
                 for i in range(len(ego_flows)):
                     if ego_flows is not None:
@@ -393,8 +388,6 @@ def train(args, train_loader, disp_net, pose_exp_net, optimizer, epoch_size,  tr
                         stacked_ego_flow.append(tmp)
             if len(stacked_ego_flow)>0:
                 loss_5+=args.smooth_loss(stacked_ego_flow).mean()
-            if len(stacked_rigid_flow) > 0:
-                loss_5 += args.smooth_loss(stacked_rigid_flow).mean()
         else:
             w5=0
 
@@ -412,8 +405,6 @@ def train(args, train_loader, disp_net, pose_exp_net, optimizer, epoch_size,  tr
                 train_writer.add_scalar('pose_smooth_loss', loss_4.item(), n_iter)
             if w5 > 0:
                 train_writer.add_scalar('flow_smooth_loss', loss_5.item(), n_iter)
-            if args.multi:
-                train_writer.add_scalar('consistency_loss', loss_6.item(), n_iter)
             train_writer.add_scalar('total_loss', loss.item(), n_iter)
 
         if args.training_output_freq > 0 and n_iter % args.training_output_freq == 0:
@@ -608,16 +599,6 @@ def validate_without_gt(args, val_loader, disp_net, pose_exp_net, epoch, output_
     end_time = time.time()
 
 
-    if log_outputs:
-        prefix = 'valid poses'
-        coeffs_names = ['tx', 'ty', 'tz']
-        if args.rotation_mode == 'euler':
-            coeffs_names.extend(['rx', 'ry', 'rz'])
-        elif args.rotation_mode == 'quat':
-            coeffs_names.extend(['qx', 'qy', 'qz'])
-        for i in range(poses.shape[1]):
-            output_writers[0].add_histogram('{} {}'.format(prefix, coeffs_names[i]), poses[:,i], epoch)
-        output_writers[0].add_histogram('disp_values', disp_values, epoch)
 
     msg = 'Evaluation. '
 
@@ -707,9 +688,6 @@ def validate_with_gt(args, val_loader, disp_net, pose_exp_net, epoch, output_wri
         msg += error_names[i]
         msg += ': '
         msg += str(round(errors_s.avg[i], 3))
-        if args.multi:
-            msg += '/'+str(round(errors_m.avg[i], 3))
-
         msg += '; '
 
     msg += ' Elapsed time: '
