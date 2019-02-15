@@ -408,7 +408,7 @@ def train(args, train_loader, disp_net, pose_exp_net, optimizer, epoch_size,  tr
             if w3 > 0:
                 train_writer.add_scalar('disparity_smoothness_loss', loss_3.item(), n_iter)
             if w4 > 0:
-                train_writer.add_scalar('pose_smooth_loss', loss_4.item(), n_iter)
+                train_writer.add_scalar('pose_penalty_loss', loss_4.item(), n_iter)
             if w5 > 0:
                 train_writer.add_scalar('flow_smooth_loss', loss_5.item(), n_iter)
             train_writer.add_scalar('total_loss', loss.item(), n_iter)
