@@ -8,7 +8,7 @@ import fnmatch
 
 
 import sys
-sys.path.insert(0, './build/lib.linux-x86_64-3.6') #The libdvs.so should be in PYTHONPATH!
+sys.path.insert(0, './pydvs/build/lib.linux-x86_64-3.6') #The libdvs.so should be in PYTHONPATH!
 import pydvs
 
 from multiprocessing import Pool

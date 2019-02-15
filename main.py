@@ -32,7 +32,8 @@ parser = argparse.ArgumentParser(description='Structure from Motion Learner',
 parser.add_argument('data', metavar='DIR',
                     help='path to dataset')
 parser.add_argument('--sequence-length', type=int, metavar='N', help='sequence length for training', default=3)
-parser.add_argument('--slices', type=int, metavar='N', help='slices for training', default=25)
+parser.add_argument('--slices', type=int, metavar='N', help='slice length for training', default=0)
+parser.add_argument('--duration', type=float, metavar='N', help='duration for a big slice', default=0.05)
 
 parser.add_argument('--rotation-mode', type=str, choices=['euler', 'quat'], default='euler',
                     help='rotation mode for PoseExpnet : euler (yaw,pitch,roll) or quaternion (last 3 coefficients)')
@@ -365,19 +366,19 @@ def train(args, train_loader, disp_net, pose_exp_net, optimizer, epoch_size,  tr
         depth = [1 / disp for disp in disparities]
 
 
+        loss_1, warped_refs, ego_flows = args.simple_photometric_reconstruction_loss(tgt_img_var, ref_imgs_var,
+                                                                                     intrinsics_var, intrinsics_inv_var,
+                                                                                     depth, explainability_mask, pose,
+                                                                                     args.ssim_weight,
+                                                                                     args.padding_mode)
 
         if args.sharp:
             pose=pose[:,0:1]
             explainability_mask=[(m[:,:1] if m is not None else m) for m in explainability_mask]
-            loss_1,warped_slices,ego_flows = args.sharpness_loss(slices,
+            loss_1,warped_slices,ego_flows_slices = args.sharpness_loss(slices,
                                                     intrinsics_var, intrinsics_inv_var,
                                                     depth, explainability_mask, pose,
                                                     args.padding_mode)
-        else:
-            loss_1,warped_refs,ego_flows = args.simple_photometric_reconstruction_loss(tgt_img_var, ref_imgs_var,
-                                                                 intrinsics_var, intrinsics_inv_var,
-                                                                 depth, explainability_mask, pose,
-                                                                 args.ssim_weight, args.padding_mode)
 
         loss_1=loss_1.mean()
 
@@ -480,25 +481,15 @@ def train(args, train_loader, disp_net, pose_exp_net, optimizer, epoch_size,  tr
 
                     if j==0:
                         if explainability_mask[k] is not None:
-                            if args.pixelpose:
-                                mask=explainability_mask[k][0, 0].data.cpu()
-                            else:
-                                mask=1-explainability_mask[k][0, 0].data.cpu()
+                            mask=explainability_mask[k][0, 0].data.cpu()
                             train_writer.add_image('train Exp mask Outputs {}'.format(k),
                                                    tensor2array(mask, max_value=1,
                                                                 colormap='bone'), n_iter)
-                    if k==0:
-                        if (explainability_mask[0].shape[1]>=4):
-                            mask=explainability_mask[0][0, 1:4].data.cpu()
-                            train_writer.add_image('train Exp components',
-                                                   tensor2array(mask, max_value=1,
-                                                                colormap='bone'), n_iter)
-
 
                     ref_warped = warped_refs_scaled[j][0]
                     stacked_im = stacked_im + ref_warped
 
-                    if ego_flows is not None:
+                    if ego_flows is not None and j == 0:
                         final_flow = flow_to_image(ego_flows[k][j][0].data.cpu().numpy()).transpose(2,0,1)
                         train_writer.add_image('ego flow {} {}'.format(k, j), final_flow / 255, n_iter)
 
@@ -587,18 +578,22 @@ def validate_without_gt(args, val_loader, disp_net, pose_exp_net, epoch, output_
             disp = disp / mean_disp
             depth = 1 / disp
 
+            loss_1, warped_refs, ego_flows = args.simple_photometric_reconstruction_loss(tgt_img_var, ref_imgs_var,
+                                                                                         intrinsics_var,
+                                                                                         intrinsics_inv_var,
+                                                                                         depth, explainability_mask,
+                                                                                         pose,
+                                                                                         args.ssim_weight,
+                                                                                         args.padding_mode)
+
             if args.sharp:
                 pose=pose[:, 0:1]
                 explainability_mask = explainability_mask[:,:1]
-                loss_1,warped_slices,ego_flows = args.sharpness_loss(slices,
+                loss_1,warped_slices,ego_flows_slices = args.sharpness_loss(slices,
                                                          intrinsics_var, intrinsics_inv_var,
                                                          depth, explainability_mask, pose,
                                                         args.padding_mode)
-            else:
-                loss_1,warped_refs,ego_flows = args.simple_photometric_reconstruction_loss(tgt_img_var, ref_imgs_var,
-                                                         intrinsics_var, intrinsics_inv_var,
-                                                         depth, explainability_mask, pose,
-                                                         args.ssim_weight,args.padding_mode)
+
 
             loss_1 = loss_1.mean().item()
             if w2 > 0:
