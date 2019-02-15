@@ -168,7 +168,7 @@ def main():
                     _, ego_flow = inverse_warp(ref_imgs[int((args.sequence_length-1)/2)], output_depth[:, 0], pose[:,int((args.sequence_length-1)/2)], intrinsics,
                                                intrinsics_inv, 'euler', 'border')
 
-                np.save(output_dir / 'ego_pose_{}{}'.format(file.namebase, '.npy'),pose[0,(args.sequence_length-1)//2].cpu().data.numpy())
+                np.save(output_dir / 'ego_pose_{}{}'.format(file.namebase, '.npy'),pose[0].cpu().data.numpy())
 
 
                 ego_flow=ego_flow[0].data.cpu().numpy()

@@ -24,6 +24,8 @@ def save_path_formatter(args, parser):
     keys_with_prefix['nls'] = 'nls'
     keys_with_prefix['smooth_loss_weight'] = 's'
     keys_with_prefix['flow_smooth_loss_weight'] = 'o'
+    keys_with_prefix['pose_loss_weight'] = 'p'
+
 
 
     for key, prefix in keys_with_prefix.items():
