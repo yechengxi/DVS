@@ -107,6 +107,7 @@ parser.add_argument("--dataset-dir", default='.', type=str, help="Dataset direct
 parser.add_argument("--dataset-list", default=None, type=str, help="Dataset list file")
 
 parser.add_argument("--scale", default=1., type=float, help="rescaling factor")
+parser.add_argument("--save-all", default=True, help="save models in all epochs")
 
 best_error = -1
 n_iter = 0
@@ -269,7 +270,7 @@ def main():
         writer.writerow(['train_loss', 'photo_loss', 'explainability_loss', 'smooth_loss'])
 
     for epoch in range(args.epochs):
-        print('epoch: %d'%epoch)
+        print('epoch: %d'%(epoch+1))
         if args.lr_scheduler == 'multistep':
             args.current_scheduler.step()
         if args.lr_scheduler == 'multistep' or args.lr_scheduler == 'cosine':
@@ -299,6 +300,10 @@ def main():
         # remember lowest error and save checkpoint
         is_best = decisive_error < best_error
         best_error = min(best_error, decisive_error)
+        if args.save_all:
+            epoch_id=epoch+1
+        else:
+            epoch_id=None
         save_checkpoint(
             args.save_path, {
                 'epoch': epoch + 1,
@@ -307,7 +312,7 @@ def main():
                 'epoch': epoch + 1,
                 'state_dict': pose_exp_net.module.state_dict()
             },
-            is_best)
+            is_best,epoch_id)
 
         with open(args.save_path/args.log_summary, 'a') as csvfile:
             writer = csv.writer(csvfile, delimiter='\t')
