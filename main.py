@@ -42,7 +42,7 @@ parser.add_argument('--with-gt', action='store_true', help='use ground truth for
 
 parser.add_argument('-j', '--workers', default=16, type=int, metavar='N',
                     help='number of data loading workers')
-parser.add_argument('--epochs', default=50, type=int, metavar='N',
+parser.add_argument('--epochs', default=30, type=int, metavar='N',
                     help='number of total epochs to run')
 parser.add_argument('--epoch-size', default=0, type=int, metavar='N',
                     help='manual epoch size (will match dataset size if not set)')
