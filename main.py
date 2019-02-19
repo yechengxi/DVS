@@ -312,7 +312,7 @@ def main():
                 'epoch': epoch + 1,
                 'state_dict': pose_exp_net.module.state_dict()
             },
-            is_best,epoch_id)
+            is_best,epoch_id=epoch_id)
 
         with open(args.save_path/args.log_summary, 'a') as csvfile:
             writer = csv.writer(csvfile, delimiter='\t')
@@ -535,7 +535,7 @@ def validate_without_gt(args, val_loader, disp_net, pose_exp_net, epoch, output_
                                                          depth, explainability_mask, pose,
                                                          args.rotation_mode, args.padding_mode)
             else:
-                loss_1,ego_flows = args.simple_photometric_reconstruction_loss(tgt_img_var, ref_imgs_var,
+                loss_1,warped_refs,ego_flows = args.simple_photometric_reconstruction_loss(tgt_img_var, ref_imgs_var,
                                                          intrinsics_var, intrinsics_inv_var,
                                                          depth, explainability_mask, pose,
                                                          args.ssim_weight,args.padding_mode)
