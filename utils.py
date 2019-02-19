@@ -74,10 +74,14 @@ def save_checkpoint(save_path, dispnet_state, exp_pose_state, is_best, filename=
     if epoch_id:
         for (prefix, state) in zip(file_prefixes, states):
             torch.save(state, save_path/'{}_epoch{}_{}'.format(prefix,str(epoch_id),filename))
+        if is_best:
+            for prefix in file_prefixes:
+                shutil.copyfile(save_path/'{}_epoch{}_{}'.format(prefix,str(epoch_id),filename), save_path/'{}_model_best.pth.tar'.format(prefix))
+
     else:
         for (prefix, state) in zip(file_prefixes, states):
             torch.save(state, save_path/'{}_{}'.format(prefix,filename))
 
-    if is_best:
-        for prefix in file_prefixes:
-            shutil.copyfile(save_path/'{}_{}'.format(prefix,filename), save_path/'{}_model_best.pth.tar'.format(prefix))
+        if is_best:
+            for prefix in file_prefixes:
+                shutil.copyfile(save_path/'{}_{}'.format(prefix,filename), save_path/'{}_model_best.pth.tar'.format(prefix))
