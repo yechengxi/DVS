@@ -75,6 +75,45 @@ class FeatureDecorr(nn.Module):
         return x1 * self.weight + self.bias
 
 
+
+class FeatureDecorr_v2(nn.Module):
+    def __init__(self, num_features, num_groups=16, eps=1e-5,n_iter=10):
+        super(FeatureDecorr_v2, self).__init__()
+        self.weight = nn.Parameter(torch.ones(1, num_features, 1, 1))
+        self.bias = nn.Parameter(torch.zeros(1, num_features, 1, 1))
+        self.num_groups = num_groups
+        self.eps = eps
+        self.n_iter=n_iter
+
+    def forward(self, x):
+        N, C, H, W = x.size()
+        G = self.num_groups
+
+        c=int(C/G)*G
+        if c==0:
+            c=C
+            G=C
+
+        x1 = x[:,:c].view(N, int(c/G), G, H, W).permute(2, 0, 1, 3, 4).contiguous().view(G, -1)
+        mean = x1.mean(-1, keepdim=True)
+        x_centerred=x1-mean
+        cov=(x_centerred@x_centerred.permute(1,0)/x_centerred.shape[1]+self.eps*torch.eye(G,dtype=x.dtype,device=x.device)).unsqueeze(0)
+
+        decorr=isqrt_newton_schulz_autograd(cov, self.n_iter)
+        x1 = decorr[0] @ x_centerred
+        x1 = x1.view(G, N, int(c / G),H, W).permute(1, 2, 0, 3, 4).contiguous().view(N,c,H,W)
+
+        if c!=C:
+            x_tmp=x[:, c:]
+            mean=x_tmp.mean()
+            var=x_tmp.var()
+            x_tmp = (x[:, c:] - mean) / (var + self.eps).sqrt()
+            x1=torch.cat([x1,x_tmp],dim=1)
+
+        return x1 * self.weight + self.bias
+
+
+
 def isqrt_newton_schulz_autograd(A, numIters):
     batchSize,dim,_ = A.shape
     normA=A.view(batchSize, -1).norm(2, 1).view(batchSize, 1, 1)
