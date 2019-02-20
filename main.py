@@ -74,7 +74,7 @@ parser.add_argument('-m', '--mask-loss-weight', type=float, help='weight for exp
 parser.add_argument('--still-loss-weight', type=float, help='weight for still mask loss', metavar='W', default=0.0)
 parser.add_argument('--nls', action='store_true', help='use non-local smoothness')
 parser.add_argument('-s', '--smooth-loss-weight', type=float, help='weight for disparity smoothness loss', metavar='W', default=0.1)
-parser.add_argument('-p','--pose-loss-weight', type=float, help='weight for pose penalty loss', metavar='W', default=0.1)
+parser.add_argument('-p','--pose-loss-weight', type=float, help='weight for pose penalty loss', metavar='W', default=0.0)
 #parser.add_argument('-c','--consistency-loss-weight', type=float, help='weight for consistency loss', metavar='W', default=0.0)
 parser.add_argument('-o','--flow-smooth-loss-weight', type=float, help='weight for optical flow smoothness loss', metavar='W', default=0.0)
 parser.add_argument('--ssim-weight', type=float, help='weight for ssim loss', metavar='W', default=0.)

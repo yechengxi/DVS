@@ -91,8 +91,7 @@ class FeatureDecorr_v2(nn.Module):
 
         c=int(C/G)*G
         if c==0:
-            c=C
-            G=C
+            c,G=C,C
 
         x1 = x[:,:c].view(N, int(c/G), G, H, W).permute(2, 0, 1, 3, 4).contiguous().view(G, -1)
         mean = x1.mean(-1, keepdim=True)

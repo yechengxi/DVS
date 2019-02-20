@@ -76,3 +76,9 @@ python run_inference.py --dataset-dir $dataset_dir --pretrained-dispnet $dispnet
 
 
 
+dispnet_dir=pretrained/MVSEC/bn/dispnet_model_best.pth.tar
+posenet_dir=pretrained/MVSEC/bn/exp_pose_model_best.pth.tar
+
+CUDA_VISIBLE_DEVICES=0 python run_inference.py --dataset-dir $dataset_dir --pretrained-dispnet $dispnet_dir --pretrained-posenet $posenet_dir  --sequence-length 5 --norm-type bn --output-dir $output_dir --final-map-size 4
+
+
