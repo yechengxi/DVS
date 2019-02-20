@@ -18,6 +18,10 @@ CUDA_VISIBLE_DEVICES=4,5 python main.py $data_dir -j 32 -m.1 --batch-size 32 -f 
 4. ecn with gn
 CUDA_VISIBLE_DEVICES=6,7 python main.py $data_dir -j 32 -m.1 --batch-size 32 -f 50 --lr 1e-2  --sequence-length 5 --log-output --simple  --with-gt  --norm-type gn --final-map-size 4 --epochs 50 >seq5.gn.log&
 
+###new fd
+CUDA_VISIBLE_DEVICES=6,7 python main.py /vulcan/scratch/cxy/Data/DVS/MVSEC/ -j 16 -m.1 --batch-size 32 -f 50 --lr 1e-2  --sequence-length 5 --log-output --simple  --with-gt  --norm-type fd --final-map-size 4 --epochs 50 >seq5.fd_new.log&
+
+
 data_dir=/vulcan/scratch/cxy/Data/DVS/MVSEC/outdoor_day_2/
 CUDA_VISIBLE_DEVICES=0,1 python main.py $data_dir -j 32 -m.1 --batch-size 32 -f 50 --lr 1e-2  --sequence-length 5 --log-output --simple  --with-gt  --norm-type fd --final-map-size 4 --epochs 50 >outdoor_day2.fd.log&
 CUDA_VISIBLE_DEVICES=2,3 python main.py $data_dir -j 32 -m.101 --batch-size 32 -f 50 --lr 1e-2  --sequence-length 5 --log-output --simple  --with-gt  --norm-type fd --n-channel 8 --growth-rate 8 --final-map-size 4 --epochs 50 >outdoor_day2.fd.tiny.log&
@@ -41,6 +45,8 @@ CUDA_VISIBLE_DEVICES=2,3 python main.py $data_dir -j 16 -m.1 --batch-size 16 -f 
 
 CUDA_VISIBLE_DEVICES=4,5 python main.py $data_dir -j 16 -m.1 --batch-size 16 -f 50 --lr 1e-2  --sequence-length 9 --log-output --simple  --with-gt  --norm-type fd --final-map-size 4 --epochs 20 >outdoor_day2.fd.seq9.log&
 
+####new fd
+CUDA_VISIBLE_DEVICES=2,3 python main.py $data_dir -j 32 -m.1 --batch-size 32 -f 50 --lr 1e-2  --sequence-length 5 --log-output --simple  --with-gt  --norm-type fd --final-map-size 4 --epochs 50 >outdoor_day2.fd_new.log&
 
 
 Run inference:
