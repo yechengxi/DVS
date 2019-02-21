@@ -21,7 +21,8 @@ class SingleConvBlock(nn.Module):
             self.bn1s = GroupNorm(in_planes, num_groups=norm_group)
         if norm_type == 'fd':
             self.bn1s = FeatureDecorr(in_planes, num_groups=norm_group)
-
+        if norm_type == 'fd_v2':
+            self.bn1s = FeatureDecorr_v2(in_planes, num_groups=norm_group)
     def forward(self, x):
         if self.bn1s is not None:
             x = self.bn1s(x)
@@ -51,7 +52,9 @@ class DoubleConvBlock(nn.Module):
         if norm_type == 'fd':
             self.bn1s = FeatureDecorr(in_planes, num_groups=norm_group)
             self.bn2s = FeatureDecorr(out_planes, num_groups=norm_group)
-
+        if norm_type == 'fd_v2':
+            self.bn1s = FeatureDecorr_v2(in_planes, num_groups=norm_group)
+            self.bn2s = FeatureDecorr_v2(out_planes, num_groups=norm_group)
     def forward(self, x):
         if self.bn1s is not None:
             x = self.bn1s(x)
