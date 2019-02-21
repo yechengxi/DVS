@@ -74,7 +74,7 @@ class FeatureDecorr(nn.Module):
         return x1 * self.weight + self.bias
 
 
-
+"""
 class FeatureDecorr_v2(nn.Module):
     def __init__(self, num_features, num_groups=16, eps=1e-5,n_iter=10):
         super(FeatureDecorr_v2, self).__init__()
@@ -110,7 +110,7 @@ class FeatureDecorr_v2(nn.Module):
 
         return x1 * self.weight + self.bias
 
-
+"""
 
 class FeatureDecorr_v3(nn.Module):
     def __init__(self, num_features, num_groups=16, eps=1e-5,n_iter=10,momentum=0.1,track_running_stats=True):
@@ -140,24 +140,29 @@ class FeatureDecorr_v3(nn.Module):
             c,G=C,C
 
         x1 = x[:,:c].view(N, int(c/G), G, H, W).permute(2, 0, 1, 3, 4).contiguous().view(G, -1)
-        mean = x1.mean(-1, keepdim=True)
-        if self.running_mean1 is None or self.running_mean1.size() != mean.size():
-            self.running_mean1 = Parameter(mean.data.clone())
+        mean1 = x1.mean(-1, keepdim=True)
+        if self.running_mean1 is None or self.running_mean1.size() != mean1.size():
+            self.running_mean1 = Parameter(mean1.data.clone())
 
-        if self.training and self.track_running_stats:
-            mean= mean* self.momentum + self.running_mean1.detach() * (1 - self.momentum)
-            self.running_mean1.data = mean.data.clone()
+        if self.track_running_stats:
+            if self.training:
+                mean1= mean1* self.momentum + self.running_mean1.detach() * (1 - self.momentum)
+                self.running_mean1.data = mean1.data.clone()
+            else:
+                mean1=self.running_mean1
 
-        x_centerred=x1-mean
+        x_centerred=x1-mean1
 
         cov=(x_centerred@x_centerred.permute(1,0)/x_centerred.shape[1]+self.eps*torch.eye(G,dtype=x.dtype,device=x.device)).unsqueeze(0)
         if self.running_cov is None or self.running_cov.size() != cov.size():
             self.running_cov = Parameter(cov.data.clone())
 
-        if self.training and self.track_running_stats:
-            cov = cov * self.momentum + self.running_cov.detach() * (1 - self.momentum)
-            self.running_cov.data = cov.data.clone()
-
+        if self.track_running_stats:
+            if self.training:
+                cov = cov * self.momentum + self.running_cov.detach() * (1 - self.momentum)
+                self.running_cov.data = cov.data.clone()
+            else:
+                cov=self.running_cov
 
         decorr=isqrt_newton_schulz_autograd(cov, self.n_iter)
         x1 = decorr[0] @ x_centerred
@@ -165,25 +170,31 @@ class FeatureDecorr_v3(nn.Module):
 
         if c!=C:
             x_tmp=x[:, c:]
-            mean=x_tmp.mean()
+            mean2=x_tmp.mean()
 
 
-            if self.running_mean2 is None or self.running_mean2.size() != mean.size():
-                self.running_mean2 = Parameter(mean.data.clone())
+            if self.running_mean2 is None or self.running_mean2.size() != mean2.size():
+                self.running_mean2 = Parameter(mean2.data.clone())
 
-            if self.training and self.track_running_stats:
-                mean = mean * self.momentum + self.running_mean2.detach() * (1 - self.momentum)
-                self.running_mean2.data = mean.data.clone()
+            if  self.track_running_stats:
+                if self.training:
+                    mean2 = mean2 * self.momentum + self.running_mean2.detach() * (1 - self.momentum)
+                    self.running_mean2.data = mean2.data.clone()
+                else:
+                    mean2=self.running_mean2.detach()
 
-            x_tmp=x_tmp-mean
+            x_tmp=x_tmp-mean2
 
             var=((x_tmp)**2).mean()
             if self.running_var is None or self.running_var.size() != var.size():
                 self.running_var = Parameter(var.data.clone())
 
-            if self.training and self.track_running_stats:
-                var=var * self.momentum + self.running_var.detach() * (1 - self.momentum)
-                self.running_var.data = var.data.clone()
+            if self.track_running_stats:
+                if self.training:
+                    var=var * self.momentum + self.running_var.detach() * (1 - self.momentum)
+                    self.running_var.data = var.data.clone()
+            else:
+                var=self.running_var.detach()
 
             x_tmp = x_tmp/ (var + self.eps).sqrt()
             x1=torch.cat([x1,x_tmp],dim=1)
