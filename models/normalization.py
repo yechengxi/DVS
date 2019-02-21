@@ -141,17 +141,23 @@ class FeatureDecorr_v3(nn.Module):
 
         x1 = x[:,:c].view(N, int(c/G), G, H, W).permute(2, 0, 1, 3, 4).contiguous().view(G, -1)
         mean = x1.mean(-1, keepdim=True)
-        x_centerred=x1-mean
-        cov=(x_centerred@x_centerred.permute(1,0)/x_centerred.shape[1]+self.eps*torch.eye(G,dtype=x.dtype,device=x.device)).unsqueeze(0)
-
         if self.running_mean1 is None or self.running_mean1.size() != mean.size():
-            self.running_mean1 = Parameter(mean.detach())
-            self.running_cov = Parameter(cov.detach())
+            self.running_mean1 = Parameter(mean.data.clone())
 
         if self.training and self.track_running_stats:
-            self.running_mean1.data = mean.detach() * self.momentum + self.running_mean1.data * (1 - self.momentum)
-            self.running_cov.data = cov.detach() * self.momentum + self.running_cov.data * (1 - self.momentum)
-            cov=cov* self.momentum + self.running_cov.detach() * (1 - self.momentum)
+            mean= mean* self.momentum + self.running_mean1.detach() * (1 - self.momentum)
+            self.running_mean1.data = mean.data.clone()
+
+        x_centerred=x1-mean
+
+        cov=(x_centerred@x_centerred.permute(1,0)/x_centerred.shape[1]+self.eps*torch.eye(G,dtype=x.dtype,device=x.device)).unsqueeze(0)
+        if self.running_cov is None or self.running_cov.size() != cov.size():
+            self.running_cov = Parameter(cov.data.clone())
+
+        if self.training and self.track_running_stats:
+            cov = cov * self.momentum + self.running_cov.detach() * (1 - self.momentum)
+            self.running_cov.data = cov.data.clone()
+
 
         decorr=isqrt_newton_schulz_autograd(cov, self.n_iter)
         x1 = decorr[0] @ x_centerred
@@ -160,19 +166,26 @@ class FeatureDecorr_v3(nn.Module):
         if c!=C:
             x_tmp=x[:, c:]
             mean=x_tmp.mean()
-            var=x_tmp.var()
+
 
             if self.running_mean2 is None or self.running_mean2.size() != mean.size():
-                self.running_mean2 = Parameter(mean.detach())
-                self.running_var = Parameter(var.detach())
+                self.running_mean2 = Parameter(mean.data.clone())
 
             if self.training and self.track_running_stats:
-                self.running_mean2.data = mean.detach() * self.momentum + self.running_mean2.data * (1 - self.momentum)
-                self.running_var.data = var.detach() * self.momentum + self.running_var.data * (1 - self.momentum)
+                mean = mean * self.momentum + self.running_mean2.detach() * (1 - self.momentum)
+                self.running_mean2.data = mean.data.clone()
+
+            x_tmp=x_tmp-mean
+
+            var=((x_tmp)**2).mean()
+            if self.running_var is None or self.running_var.size() != var.size():
+                self.running_var = Parameter(var.data.clone())
+
+            if self.training and self.track_running_stats:
                 var=var * self.momentum + self.running_var.detach() * (1 - self.momentum)
+                self.running_var.data = var.data.clone()
 
-
-            x_tmp = (x[:, c:] - self.running_mean2) / (self.running_var + self.eps).sqrt()
+            x_tmp = x_tmp/ (var + self.eps).sqrt()
             x1=torch.cat([x1,x_tmp],dim=1)
 
         return x1 * self.weight + self.bias
