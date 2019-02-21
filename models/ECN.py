@@ -113,7 +113,7 @@ class CascadeLayer(nn.Module):
         super(CascadeLayer, self).__init__()
         self.scale_factor = scale_factor
         self.ConvBlock = DoubleConvBlock(in_planes, out_planes, kernel_size, int((kernel_size - 1) / 2),
-                                         norm_type=norm_type)
+                                         norm_type=norm_type,norm_group=norm_group)
     def forward(self, x, output_size=None):
 
         out = self.ConvBlock(x)
@@ -129,9 +129,8 @@ class InvertedCascadeLayer(nn.Module):
     def __init__(self, in_planes, in_planes2, out_planes, kernel_size=3, padding=1, dropout_rate=0.,norm_type='gn', norm_group=16,n_iter=1):
         super(InvertedCascadeLayer, self).__init__()
 
-        self.ConvBlock1 = SingleConvBlock(in_planes, out_planes, kernel_size, padding, norm_type=norm_type)
-        self.ConvBlock2 = SingleConvBlock(in_planes2 + out_planes, out_planes, kernel_size, padding,
-                                          norm_type=norm_type)
+        self.ConvBlock1 = SingleConvBlock(in_planes, out_planes, kernel_size, padding, norm_type=norm_type,norm_group=norm_group)
+        self.ConvBlock2 = SingleConvBlock(in_planes2 + out_planes, out_planes, kernel_size, padding,norm_type=norm_type,norm_group=norm_group)
 
     def forward(self, x, x2):
         x = scaling(x, output_size=x2.shape)
@@ -144,7 +143,7 @@ class InvertedCascadeLayer(nn.Module):
 
 class ECN_Disp(nn.Module):
     def __init__(self, input_size, in_planes=3, init_planes=32, scale_factor=0.5, growth_rate=32, final_map_size=1,
-                 alpha=10, beta=0.01, norm_type='gn'):
+                 alpha=10, beta=0.01, norm_type='gn',norm_group=16):
         super(ECN_Disp, self).__init__()
         self.scale_factor = scale_factor
         self.final_map_size = final_map_size
@@ -166,7 +165,7 @@ class ECN_Disp(nn.Module):
                 kernel_size = 3
             self.encoding_layers.append(
                 CascadeLayer(in_planes=out_planes, out_planes=new_out_planes, kernel_size=kernel_size,
-                             scale_factor=scale_factor, norm_type=norm_type))
+                             scale_factor=scale_factor, norm_type=norm_type,norm_group=norm_group))
             output_size = math.floor(output_size * scale_factor)
             out_planes = out_planes + growth_rate
 
@@ -186,7 +185,7 @@ class ECN_Disp(nn.Module):
                 in_planes2 = in_planes2 - growth_rate  # encoder planes
                 new_out_planes = max(out_planes - growth_rate, self.pred_planes)
             self.decoding_layers.append(
-                InvertedCascadeLayer(in_planes=out_planes, in_planes2=in_planes2, out_planes=new_out_planes,norm_type=norm_type))
+                InvertedCascadeLayer(in_planes=out_planes, in_planes2=in_planes2, out_planes=new_out_planes,norm_type=norm_type,norm_group=norm_group))
             out_planes = new_out_planes
             planes.append(out_planes)
 
@@ -196,10 +195,10 @@ class ECN_Disp(nn.Module):
         self.predict_maps = nn.ModuleList()
         for i in range(self.predicts):
             if False:
-                self.predict_maps.append(SingleConvBlock(planes[i], 1, kernel_size=3, padding=1, norm_type=norm_type))
+                self.predict_maps.append(SingleConvBlock(planes[i], 1, kernel_size=3, padding=1, norm_type=norm_type,norm_group=norm_group))
             else:
                 self.predict_maps.append(
-                nn.Sequential(SingleConvBlock(planes[i], 1, kernel_size=3, padding=1, norm_type=norm_type),
+                nn.Sequential(SingleConvBlock(planes[i], 1, kernel_size=3, padding=1, norm_type=norm_type,norm_group=norm_group),
                               nn.BatchNorm2d(1,affine=True,momentum=0.1))
             )
     def init_weights(self):
@@ -262,9 +261,13 @@ class ECN_Disp(nn.Module):
             msg = 'encode'
             visualize_all_maps(encode, msg)
             msg = 'decode'
-            for i in range(self.predicts):
-                decode[-1 - i][:, :self.pred_planes] = disp_predicts[i]
+            #for i in range(self.predicts):
+            #    decode[-1 - i][:, :self.pred_planes] = disp_predicts[i]
             visualize_all_maps(decode[::-1], msg)
+            for i,p in enumerate(disp_predicts):
+                plt.imshow(p[0,0].cpu().data, cmap='gray')
+                plt.axis('off')
+                plt.savefig('predict%d' % (i+1), bbox_inches='tight', pad_inches=0)
         if self.training:
             return disp_predicts
         else:
@@ -274,7 +277,7 @@ class ECN_Disp(nn.Module):
 class ECN_Pose(nn.Module):
     def __init__(self, input_size, nb_ref_imgs=2, init_planes=16, scale_factor=0.5, growth_rate=16,
                  final_map_size=1, output_exp=False,
-                 norm_type='gn'):
+                 norm_type='gn',norm_group=16):
         super(ECN_Pose, self).__init__()
         self.scale_factor = scale_factor
         self.final_map_size = final_map_size
@@ -299,7 +302,7 @@ class ECN_Pose(nn.Module):
                 kernel_size = 3
             self.encoding_layers.append(
                 CascadeLayer(in_planes=out_planes, out_planes=new_out_planes, kernel_size=kernel_size,
-                             scale_factor=scale_factor,norm_type=norm_type))
+                             scale_factor=scale_factor,norm_type=norm_type,norm_group=norm_group))
             output_size = math.floor(output_size * scale_factor)
             out_planes = out_planes + growth_rate
 
@@ -307,7 +310,7 @@ class ECN_Pose(nn.Module):
         print(out_planes, ' encoded feature maps.')
 
         self.pose_pred = SingleConvBlock(out_planes, 6 * self.nb_ref_imgs, kernel_size=1, padding=0,
-                                         norm_type=norm_type)
+                                         norm_type=norm_type,norm_group=norm_group)
 
         in_planes2 = out_planes  # encoder planes
         self.predicts = 50
@@ -321,7 +324,7 @@ class ECN_Pose(nn.Module):
                     in_planes2 = in_planes2 - growth_rate  # encoder planes
                     new_out_planes = max(out_planes - growth_rate, self.pred_planes)
                 self.decoding_layers.append(
-                    InvertedCascadeLayer(in_planes=out_planes, in_planes2=in_planes2, out_planes=new_out_planes,norm_type=norm_type))
+                    InvertedCascadeLayer(in_planes=out_planes, in_planes2=in_planes2, out_planes=new_out_planes,norm_type=norm_type,norm_group=norm_group))
                 out_planes = new_out_planes
                 planes.append(out_planes)
 
@@ -331,10 +334,10 @@ class ECN_Pose(nn.Module):
             self.predict_maps = nn.ModuleList()
             for i in range(self.predicts):
                 if False:
-                    self.predict_maps.append(SingleConvBlock(planes[i], self.pred_planes, kernel_size=3, padding=1, norm_type=norm_type))
+                    self.predict_maps.append(SingleConvBlock(planes[i], self.pred_planes, kernel_size=3, padding=1, norm_type=norm_type,norm_group=norm_group))
                 else:
                     self.predict_maps.append(
-                    nn.Sequential(SingleConvBlock(planes[i], self.pred_planes, kernel_size=3, padding=1, norm_type=norm_type),
+                    nn.Sequential(SingleConvBlock(planes[i], self.pred_planes, kernel_size=3, padding=1, norm_type=norm_type,norm_group=norm_group),
                                   nn.BatchNorm2d(self.pred_planes,affine=True,momentum=0.1))
                 )
     def init_weights(self):

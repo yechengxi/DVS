@@ -46,7 +46,6 @@ parser.add_argument('--scale-factor', default=1. / 2.,
 parser.add_argument('--final-map-size', default=4, type=int, help='final map size')
 
 
-
 def main():
     args = parser.parse_args()
 
@@ -112,8 +111,8 @@ def main():
     shifts.pop(demi_length)
 
 
-    for i in range(demi_length,len(imgs)-demi_length):
-    #for i in range(828,829):
+    #for i in range(demi_length,len(imgs)-demi_length):
+    for i in range(828,829):
 
         file =File()
         file.namebase=os.path.basename(imgs[i]).replace('.jpg','')
@@ -142,8 +141,8 @@ def main():
             ref_imgs = [(im / 255 ).cuda() for im in ref_imgs]
 
 
-            msg=None
-            #msg = 'test'
+            #msg=None
+            msg = 'debug'
             if args.arch=='ecn':
                 output= disp_net(img,msg)#,msg#,raw_disp
             else:

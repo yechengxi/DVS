@@ -21,7 +21,7 @@ CUDA_VISIBLE_DEVICES=6,7 python main.py $data_dir -j 32 -m.1 --batch-size 32 -f 
 ###new fd
 CUDA_VISIBLE_DEVICES=6,7 python main.py /vulcan/scratch/cxy/Data/DVS/MVSEC/ -j 16 -m.1 --batch-size 32 -f 50 --lr 1e-2  --sequence-length 5 --log-output --simple  --with-gt  --norm-type fd --final-map-size 4 --epochs 50 >seq5.fd_new.log&
 
-
+###outdoor day2
 data_dir=/vulcan/scratch/cxy/Data/DVS/MVSEC/outdoor_day_2/
 CUDA_VISIBLE_DEVICES=0,1 python main.py $data_dir -j 32 -m.1 --batch-size 32 -f 50 --lr 1e-2  --sequence-length 5 --log-output --simple  --with-gt  --norm-type fd --final-map-size 4 --epochs 50 >outdoor_day2.fd.log&
 CUDA_VISIBLE_DEVICES=2,3 python main.py $data_dir -j 32 -m.101 --batch-size 32 -f 50 --lr 1e-2  --sequence-length 5 --log-output --simple  --with-gt  --norm-type fd --n-channel 8 --growth-rate 8 --final-map-size 4 --epochs 50 >outdoor_day2.fd.tiny.log&
@@ -39,11 +39,31 @@ CUDA_VISIBLE_DEVICES=6,7 python main.py $data_dir -j 16 -m1 -s.5 --batch-size 32
 CUDA_VISIBLE_DEVICES=6,7 python main.py $data_dir -j 8 -m.1 --batch-size 8 -f 50 --lr 1e-2  --sequence-length 5 --log-output --simple  --with-gt  --norm-type fd --final-map-size 4 --epochs 20 >outdoor_day2.fd.m1.log&
 
 
-CUDA_VISIBLE_DEVICES=0,1 python main.py $data_dir -j 16 -m.1 --batch-size 32 -f 50 --lr 1e-2  --sequence-length 3 --log-output --simple  --with-gt  --norm-type fd --final-map-size 4 --epochs 20 >outdoor_day2.fd.seq3.log&
+CUDA_VISIBLE_DEVICES=0,1 python main.py $data_dir -j 32 -m.1 --batch-size 32 -f 100 --lr 1e-2  --sequence-length 3 --log-output --simple  --with-gt  --norm-type fd --final-map-size 4 --epochs 20 >outdoor_day2.fd.seq3.log&
 
-CUDA_VISIBLE_DEVICES=2,3 python main.py $data_dir -j 16 -m.1 --batch-size 16 -f 50 --lr 1e-2  --sequence-length 7 --log-output --simple  --with-gt  --norm-type fd --final-map-size 4 --epochs 20 >outdoor_day2.fd.seq7.log&
+CUDA_VISIBLE_DEVICES=2,3 python main.py $data_dir -j 32 -m.1 --batch-size 32 -f 100 --lr 1e-2  --sequence-length 7 --log-output --simple  --with-gt  --norm-type fd --final-map-size 4 --epochs 20 >outdoor_day2.fd.seq7.log&
 
-CUDA_VISIBLE_DEVICES=4,5 python main.py $data_dir -j 16 -m.1 --batch-size 16 -f 50 --lr 1e-2  --sequence-length 9 --log-output --simple  --with-gt  --norm-type fd --final-map-size 4 --epochs 20 >outdoor_day2.fd.seq9.log&
+CUDA_VISIBLE_DEVICES=2,3 python main.py $data_dir -j 16 -m.1 --batch-size 32 -f 100 --lr 1e-2  --sequence-length 9 --log-output --simple  --with-gt  --norm-type fd --final-map-size 4 --epochs 20 >outdoor_day2.fd.seq9.log&
+
+
+
+1. tiny ecn with fd
+CUDA_VISIBLE_DEVICES=0,1 python main.py $data_dir -j 32 -m.101 --batch-size 32 -f 100 --lr 1e-2  --sequence-length 5 --log-output --simple  --with-gt  --norm-type fd  --epochs 30 >fd.log&
+2. tiny ecn with bn
+CUDA_VISIBLE_DEVICES=0,1 python main.py $data_dir -j 32 -m.1 --batch-size 32 -f 100 --lr 1e-2  --sequence-length 5 --log-output --simple  --with-gt  --norm-type bn --epochs 30 >bn.log&
+3. tiny ecn with gn
+CUDA_VISIBLE_DEVICES=2,3 python main.py $data_dir -j 32 -m.1 --batch-size 32 -f 100 --lr 1e-2  --sequence-length 5 --log-output --simple  --with-gt  --norm-type gn --epochs 30 >gn.log&
+
+
+data_dir=/vulcan/scratch/cxy/Data/DVS/MVSEC/
+
+1. tiny ecn with fd
+CUDA_VISIBLE_DEVICES=0,1,2,3 python main.py $data_dir -j 32 -m.1001 --batch-size 32 -f 100 --lr 1e-2  --sequence-length 5 --log-output --simple  --with-gt  --norm-type fd  --epochs 30 >outdoor.fd.log&
+2. tiny ecn with bn
+CUDA_VISIBLE_DEVICES=0,1,2,3 python main.py $data_dir -j 32 -m.1001 --batch-size 32 -f 100 --lr 1e-2  --sequence-length 5 --log-output --simple  --with-gt  --norm-type bn --epochs 30 >outdoor.bn.log&
+3. tiny ecn with gn
+CUDA_VISIBLE_DEVICES=4,5,6,7 python main.py $data_dir -j 32 -m.1001 --batch-size 32 -f 100 --lr 1e-2  --sequence-length 5 --log-output --simple  --with-gt  --norm-type gn --epochs 30 >outdoor.gn.log&
+
 
 ####new fd
 CUDA_VISIBLE_DEVICES=2,3 python main.py $data_dir -j 32 -m.1 --batch-size 32 -f 50 --lr 1e-2  --sequence-length 5 --log-output --simple  --with-gt  --norm-type fd --final-map-size 4 --epochs 50 >outdoor_day2.fd_new.log&

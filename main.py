@@ -95,6 +95,7 @@ parser.add_argument('--multistep-gamma', default=0.1, type=float,
 
 parser.add_argument('--arch', default='ecn', help='architecture')
 parser.add_argument('--norm-type', default='gn', help='normalization type')
+parser.add_argument('--norm-group', default=16,type=int, help='normalization groups')
 
 parser.add_argument('--n-channel', '--init-channel', default=8, type=int,
                     help='initial feature channels(32|64|128).')
@@ -184,7 +185,7 @@ def main():
 
     if args.arch=='ecn':
         disp_net = models.ECN_Disp(input_size=200*args.scale,#260*args.scale*.5,
-                                   init_planes=args.n_channel,scale_factor=args.scale_factor,growth_rate=args.growth_rate,final_map_size=args.final_map_size,norm_type=args.norm_type).cuda()
+                                   init_planes=args.n_channel,scale_factor=args.scale_factor,growth_rate=args.growth_rate,final_map_size=args.final_map_size,norm_type=args.norm_type,norm_group=args.norm_group).cuda()
     else:
         disp_net = models.DispNetS().cuda()
 
@@ -197,7 +198,7 @@ def main():
     if args.arch == 'ecn':
         pose_exp_net = models.ECN_Pose(input_size=200*args.scale,#260*args.scale*.5,
                                        nb_ref_imgs=args.sequence_length - 1,init_planes=args.n_channel//2,scale_factor=args.scale_factor,growth_rate=args.growth_rate//2,final_map_size=args.final_map_size,
-                                          output_exp=output_exp,norm_type=args.norm_type).cuda()
+                                          output_exp=output_exp,norm_type=args.norm_type,norm_group=args.norm_group).cuda()
     else:
         pose_exp_net = models.PoseExpNet(nb_ref_imgs=args.sequence_length - 1, output_exp=output_exp,output_pixel_pose=False,output_disp=False).cuda()
 
