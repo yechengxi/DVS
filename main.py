@@ -94,7 +94,7 @@ parser.add_argument('--multistep-gamma', default=0.1, type=float,
                     help='the gamma parameter in multistep|plateau scheduler')
 
 parser.add_argument('--arch', default='ecn', help='architecture')
-parser.add_argument('--norm-type', default='gn', help='normalization type')
+parser.add_argument('--norm-type', default='gn', type=str,help='normalization type')
 parser.add_argument('--norm-group', default=16,type=int, help='normalization groups')
 
 parser.add_argument('--n-channel', '--init-channel', default=8, type=int,

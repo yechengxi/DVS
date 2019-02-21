@@ -49,6 +49,8 @@ CUDA_VISIBLE_DEVICES=2,3 python main.py $data_dir -j 16 -m.1 --batch-size 32 -f 
 
 1. tiny ecn with fd
 CUDA_VISIBLE_DEVICES=0,1,2,3 python main.py $data_dir -j 32 -m.101 --batch-size 32 -f 100 --lr 1e-2  --sequence-length 5 --log-output --simple  --with-gt  --norm-type fd  --epochs 30 >fd.log&
+CUDA_VISIBLE_DEVICES=4,5,6,7 python main.py $data_dir -j 32 -m.101 --batch-size 32 -f 100 --lr 1e-2  --sequence-length 5 --log-output --simple  --with-gt  --norm-type fd_v2  --epochs 30 >fd_v2.log&
+
 2. tiny ecn with bn
 CUDA_VISIBLE_DEVICES=0,1 python main.py $data_dir -j 32 -m.1 --batch-size 32 -f 100 --lr 1e-2  --sequence-length 5 --log-output --simple  --with-gt  --norm-type bn --epochs 30 >bn.log&
 3. tiny ecn with gn
