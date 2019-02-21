@@ -96,9 +96,9 @@ parser.add_argument('--multistep-gamma', default=0.1, type=float,
 parser.add_argument('--arch', default='ecn', help='architecture')
 parser.add_argument('--norm-type', default='gn', help='normalization type')
 
-parser.add_argument('--n-channel', '--init-channel', default=32, type=int,
+parser.add_argument('--n-channel', '--init-channel', default=8, type=int,
                     help='initial feature channels(32|64|128).')
-parser.add_argument('--growth-rate', default=32, type=int, help='feature channel growth rate.')
+parser.add_argument('--growth-rate', default=8, type=int, help='feature channel growth rate.')
 parser.add_argument('--scale-factor', default=1. / 2.,
                     type=float, help='scaling factor of each layer(0.5|0.75|0.875)')
 parser.add_argument('--final-map-size', default=4, type=int, help='final map size')

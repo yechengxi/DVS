@@ -51,7 +51,7 @@ CUDA_VISIBLE_DEVICES=2,3 python main.py $data_dir -j 32 -m.1 --batch-size 32 -f 
 
 Run inference:
 
-dataset_dir=/vulcan/scratch/cxy/Data/DVS/MVSEC/outdoor_night_1/eval
+dataset_dir=/vulcan/scratch/cxy/Data/DVS/MVSEC/outdoor_day_2/eval
 output_dir=./results/outdoor_night_1/eval
 
 
@@ -82,3 +82,17 @@ posenet_dir=pretrained/MVSEC/bn/exp_pose_model_best.pth.tar
 CUDA_VISIBLE_DEVICES=0 python run_inference.py --dataset-dir $dataset_dir --pretrained-dispnet $dispnet_dir --pretrained-posenet $posenet_dir  --sequence-length 5 --norm-type bn --output-dir $output_dir --final-map-size 4
 
 
+##indoor
+data_dir=/vulcan/scratch/cxy/Data/DVS/indoor
+CUDA_VISIBLE_DEVICES=0,1,2,3 python main.py $data_dir -j 32 -m.1 --batch-size 32 -f 50 --lr 1e-2  --sequence-length 5 --log-output --simple  --with-gt  --norm-type fd --final-map-size 4 --epochs 50 >indoor.log&
+CUDA_VISIBLE_DEVICES=4,5,6,7 python main.py $data_dir -j 32 -m.101 --batch-size 32 -f 50 --lr 1e-2  --sequence-length 5 --log-output --simple  --with-gt  --norm-type fd --n-channel 8 --growth-rate 8 --final-map-size 4 --epochs 50 >indoor.tiny.log&
+
+CUDA_VISIBLE_DEVICES=0,1,2,3 python main.py $data_dir -j 32 -m.101 --batch-size 32 -f 50 --lr 1e-2  --sequence-length 5 --log-output --simple  --with-gt  --norm-type fd --n-channel 4 --growth-rate 4 --final-map-size 8 --epochs 50 >indoor.super.tiny.log&
+
+CUDA_VISIBLE_DEVICES=4,5,6,7 python main.py $data_dir -j 32 -m.103 --batch-size 32 -f 50 --lr 1e-2  --sequence-length 5 --log-output --simple  --with-gt  --norm-type fd --n-channel 4 --growth-rate 4 --final-map-size 8 --scale-factor .3 --epochs 50 >indoor.super.super.tiny.log&
+
+
+##tiny things
+CUDA_VISIBLE_DEVICES=4,5,6,7 python main.py $data_dir -j 32 -m.102 --batch-size 32 -f 50 --lr 1e-2  --sequence-length 5 --log-output --simple  --with-gt  --norm-type fd --n-channel 4 --growth-rate 4 --final-map-size 8 --epochs 50 >outdoor.super.tiny.log&
+
+CUDA_VISIBLE_DEVICES=0,1,2,3 python main.py $data_dir -j 32 -m.103 --batch-size 32 -f 50 --lr 1e-2  --sequence-length 5 --log-output --simple  --with-gt  --norm-type fd --n-channel 4 --growth-rate 4 --final-map-size 8 --scale-factor .3 --epochs 50 >outdoor.super.super.tiny.log&
