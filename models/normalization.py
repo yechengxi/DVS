@@ -145,14 +145,15 @@ class FeatureDecorr_v3(nn.Module):
         cov=(x_centerred@x_centerred.permute(1,0)/x_centerred.shape[1]+self.eps*torch.eye(G,dtype=x.dtype,device=x.device)).unsqueeze(0)
 
         if self.running_mean1 is None or self.running_mean1.size() != mean.size():
-            self.running_mean1 = Parameter(torch.Tensor(mean.data))
-            self.running_cov = Parameter(torch.Tensor(cov.data))
+            self.running_mean1 = Parameter(mean.detach())
+            self.running_cov = Parameter(cov.detach())
 
         if self.training and self.track_running_stats:
-            self.running_mean1 = mean * self.momentum + self.running_mean1.detach() * (1 - self.momentum)
-            self.running_cov = cov * self.momentum + self.running_cov.detach() * (1 - self.momentum)
+            self.running_mean1.data = mean.detach() * self.momentum + self.running_mean1.data * (1 - self.momentum)
+            self.running_cov.data = cov.detach() * self.momentum + self.running_cov.data * (1 - self.momentum)
+            cov=cov* self.momentum + self.running_cov.detach() * (1 - self.momentum)
 
-        decorr=isqrt_newton_schulz_autograd(self.running_cov, self.n_iter)
+        decorr=isqrt_newton_schulz_autograd(cov, self.n_iter)
         x1 = decorr[0] @ x_centerred
         x1 = x1.view(G, N, int(c / G),H, W).permute(1, 2, 0, 3, 4).contiguous().view(N,c,H,W)
 
@@ -162,12 +163,13 @@ class FeatureDecorr_v3(nn.Module):
             var=x_tmp.var()
 
             if self.running_mean2 is None or self.running_mean2.size() != mean.size():
-                self.running_mean2 = Parameter(torch.Tensor(mean.data))
-                self.running_var = Parameter(torch.Tensor(var.data))
+                self.running_mean2 = Parameter(mean.detach())
+                self.running_var = Parameter(var.detach())
 
             if self.training and self.track_running_stats:
-                self.running_mean2 = mean * self.momentum + self.running_mean2.detach() * (1 - self.momentum)
-                self.running_var = var * self.momentum + self.running_var.detach() * (1 - self.momentum)
+                self.running_mean2.data = mean.detach() * self.momentum + self.running_mean2.data * (1 - self.momentum)
+                self.running_var.data = var.detach() * self.momentum + self.running_var.data * (1 - self.momentum)
+                var=var * self.momentum + self.running_var.detach() * (1 - self.momentum)
 
 
             x_tmp = (x[:, c:] - self.running_mean2) / (self.running_var + self.eps).sqrt()
