@@ -112,6 +112,70 @@ class FeatureDecorr_v2(nn.Module):
 
 
 
+class FeatureDecorr_v3(nn.Module):
+    def __init__(self, num_features, num_groups=16, eps=1e-5,n_iter=10,momentum=0.1,track_running_stats=True):
+        super(FeatureDecorr_v3, self).__init__()
+        self.weight = nn.Parameter(torch.ones(1, num_features, 1, 1))
+        self.bias = nn.Parameter(torch.zeros(1, num_features, 1, 1))
+        self.num_groups = num_groups
+        self.eps = eps
+        self.n_iter=n_iter
+        self.track_running_stats = track_running_stats
+        self.momentum = momentum
+
+        if self.track_running_stats:
+            self.register_parameter('running_mean1', None)
+            self.register_parameter('running_cov', None)
+            self.register_parameter('running_mean2', None)
+            self.register_parameter('running_var', None)
+
+
+
+    def forward(self, x):
+        N, C, H, W = x.size()
+        G = self.num_groups
+
+        c=int(C/G)*G
+        if c==0:
+            c,G=C,C
+
+        x1 = x[:,:c].view(N, int(c/G), G, H, W).permute(2, 0, 1, 3, 4).contiguous().view(G, -1)
+        mean = x1.mean(-1, keepdim=True)
+        x_centerred=x1-mean
+        cov=(x_centerred@x_centerred.permute(1,0)/x_centerred.shape[1]+self.eps*torch.eye(G,dtype=x.dtype,device=x.device)).unsqueeze(0)
+
+        if self.running_mean1 is None or self.running_mean1.size() != mean.size():
+            self.running_mean1 = Parameter(torch.Tensor(mean.data))
+            self.running_cov = Parameter(torch.Tensor(cov.data))
+
+        if self.training and self.track_running_stats:
+            self.running_mean1 = mean * self.momentum + self.running_mean1.detach() * (1 - self.momentum)
+            self.running_cov = cov * self.momentum + self.running_cov.detach() * (1 - self.momentum)
+
+        decorr=isqrt_newton_schulz_autograd(self.running_cov, self.n_iter)
+        x1 = decorr[0] @ x_centerred
+        x1 = x1.view(G, N, int(c / G),H, W).permute(1, 2, 0, 3, 4).contiguous().view(N,c,H,W)
+
+        if c!=C:
+            x_tmp=x[:, c:]
+            mean=x_tmp.mean()
+            var=x_tmp.var()
+
+            if self.running_mean2 is None or self.running_mean2.size() != mean.size():
+                self.running_mean2 = Parameter(torch.Tensor(mean.data))
+                self.running_var = Parameter(torch.Tensor(var.data))
+
+            if self.training and self.track_running_stats:
+                self.running_mean2 = mean * self.momentum + self.running_mean2.detach() * (1 - self.momentum)
+                self.running_var = var * self.momentum + self.running_var.detach() * (1 - self.momentum)
+
+
+            x_tmp = (x[:, c:] - self.running_mean2) / (self.running_var + self.eps).sqrt()
+            x1=torch.cat([x1,x_tmp],dim=1)
+
+        return x1 * self.weight + self.bias
+
+
 def isqrt_newton_schulz_autograd(A, numIters):
     batchSize,dim,_ = A.shape
     normA=A.view(batchSize, -1).norm(2, 1).view(batchSize, 1, 1)
