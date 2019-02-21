@@ -50,8 +50,7 @@ class FeatureDecorr(nn.Module):
 
         c=int(C/G)*G
         if c==0:
-            c=C
-            G=C
+            c,G=C,C
 
         #x1=x[:,:c].view(N,G,-1)
         x1 = x[:,:c].view(N, int(c/G), G, H, W).permute(0, 2, 1, 3, 4).contiguous().view(N, G, -1)

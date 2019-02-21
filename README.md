@@ -125,3 +125,5 @@ CUDA_VISIBLE_DEVICES=4,5,6,7 python main.py $data_dir -j 32 -m.103 --batch-size 
 CUDA_VISIBLE_DEVICES=4,5,6,7 python main.py $data_dir -j 32 -m.102 --batch-size 32 -f 50 --lr 1e-2  --sequence-length 5 --log-output --simple  --with-gt  --norm-type fd --n-channel 4 --growth-rate 4 --final-map-size 8 --epochs 50 >outdoor.super.tiny.log&
 
 CUDA_VISIBLE_DEVICES=0,1,2,3 python main.py $data_dir -j 32 -m.103 --batch-size 32 -f 50 --lr 1e-2  --sequence-length 5 --log-output --simple  --with-gt  --norm-type fd --n-channel 4 --growth-rate 4 --final-map-size 8 --scale-factor .3 --epochs 50 >outdoor.super.super.tiny.log&
+
+CUDA_VISIBLE_DEVICES=0,1,2,3 python main.py $data_dir -j 32 -m.102 --batch-size 32 -f 50 --lr 1e-2  --sequence-length 5 --log-output --simple  --with-gt  --norm-type fd --norm-group 8 --n-channel 4 --growth-rate 4 --final-map-size 8 --epochs 50 >outdoor.super.tiny.g8.log&
