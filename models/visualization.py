@@ -11,11 +11,11 @@ def visualize_all_maps(out,msg):
     channels=[out[i].shape[1] for i in range(len(out))]
 
     growth_rate=out[-1].shape[1]-out[-2].shape[1]
-    max_c=8
+    max_c=min(8,growth_rate)
     n_layers=len(out)
 
-    for layer in range(1,1+n_layers):
-        cols=max(channels[:layer])
+    for layer in range(0,n_layers):
+        cols=channels[layer]
         cnt=0
         for level in range(0,cols,growth_rate):
             for c in range(max_c):
@@ -28,7 +28,7 @@ def visualize_all_maps(out,msg):
         #gs = gridspec.GridSpec(1, cnt, wspace=0.05, hspace=0.05)
         gs = gridspec.GridSpec(math.ceil(cnt/max_c), min(cnt,max_c), wspace=0.05, hspace=0.05)
 
-        ims=out[layer-1]
+        ims=out[layer]
         cnt = 0
         r=0
         for level in range(0, cols, growth_rate):
@@ -42,8 +42,7 @@ def visualize_all_maps(out,msg):
                     img = (img - img.mean()) / (img.std()+1e-6)
                     img[img<-3]=-3
                     img[img > 3]=3
-                    #img=(img-img.min())/(img.max()-img.min()+1e-6)
-                    #img=img.__pow__(0.5)
+
                     ax.imshow(img, cmap='gray')
                     ax.set_axis_off()
                     cnt = cnt + 1

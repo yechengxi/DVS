@@ -258,16 +258,20 @@ class ECN_Disp(nn.Module):
         disp_predicts = [self.alpha * torch.sigmoid(predicts[i]) + self.beta for i in range(self.predicts)]
 
         if msg is not None:
-            msg = 'encode'
+            msg = 'depth_encoder'
             visualize_all_maps(encode, msg)
-            msg = 'decode'
+            msg = 'depth_decoder'
             #for i in range(self.predicts):
             #    decode[-1 - i][:, :self.pred_planes] = disp_predicts[i]
             visualize_all_maps(decode[::-1], msg)
             for i,p in enumerate(disp_predicts):
-                plt.imshow(p[0,0].cpu().data, cmap='gray')
+                img=p[0,0].cpu().data.numpy()
+                img = (img - img.mean()) / (img.std() + 1e-6)
+                img[img < -3] = -3
+                img[img > 3] = 3
+                plt.imshow(img, cmap='gray')
                 plt.axis('off')
-                plt.savefig('predict%d' % (i+1), bbox_inches='tight', pad_inches=0)
+                plt.savefig('depth_predict%d' % (i+1), bbox_inches='tight', pad_inches=0)
         if self.training:
             return disp_predicts
         else:
@@ -359,7 +363,7 @@ class ECN_Pose(nn.Module):
                 if m.bias is not None:
                     nn.init.constant_(m.bias, 0)
 
-    def forward(self, target_image, ref_imgs):
+    def forward(self, target_image, ref_imgs,msg=None):
         assert (len(ref_imgs) == self.nb_ref_imgs)
         input = [target_image]
         input.extend(ref_imgs)
@@ -404,6 +408,23 @@ class ECN_Pose(nn.Module):
             exps = [torch.sigmoid(predicts[i][:, :self.nb_ref_imgs]) for i in range(self.predicts)]
         else:
             exps = [None for i in range(self.predicts)]
+
+
+        if msg is not None:
+            msg = 'pose_encoder'
+            visualize_all_maps(encode, msg)
+            msg = 'pose_decoder'
+            #for i in range(self.predicts):
+            #    decode[-1 - i][:, :self.pred_planes] = disp_predicts[i]
+            visualize_all_maps(decode[::-1], msg)
+            for i,p in enumerate(exps):
+                img=p[0,0].cpu().data.numpy()
+                img = (img - img.mean()) / (img.std() + 1e-6)
+                img[img < -3] = -3
+                img[img > 3] = 3
+                plt.imshow(img, cmap='gray')
+                plt.axis('off')
+                plt.savefig('exp_predict%d' % (i+1), bbox_inches='tight', pad_inches=0)
 
         if self.training:
             return exps, pose

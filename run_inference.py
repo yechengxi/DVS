@@ -37,6 +37,7 @@ parser.add_argument("--img-exts", default=['png', 'jpg', 'bmp'], nargs='*', type
 
 parser.add_argument('--arch', default='ecn', help='architecture')
 parser.add_argument('--norm-type', default='fd', help='normalization type')
+parser.add_argument('--norm-group', default=16,type=int, help='normalization groups')
 
 parser.add_argument('--n-channel', '--init-channel', default=8, type=int,
                     help='initial feature channels(32|64|128).')
@@ -50,7 +51,7 @@ def main():
     args = parser.parse_args()
 
     if args.arch=='ecn':
-        disp_net = ECN_Disp(input_size=args.img_height,init_planes=args.n_channel,scale_factor=args.scale_factor,growth_rate=args.growth_rate,final_map_size=args.final_map_size,norm_type=args.norm_type).cuda()
+        disp_net = ECN_Disp(input_size=args.img_height,init_planes=args.n_channel,scale_factor=args.scale_factor,growth_rate=args.growth_rate,final_map_size=args.final_map_size,norm_type=args.norm_type,norm_group=args.norm_group).cuda()
     else:
         disp_net = DispNetS().cuda()
 
@@ -68,7 +69,7 @@ def main():
                                            #output_exp2=True,
                                            #output_pixel_pose=True,
                                            #output_disp=args.multi,
-                                           norm_type=args.norm_type).cuda()
+                                           norm_type=args.norm_type,norm_group=args.norm_group).cuda()
         else:
             pose_net = PoseExpNet(nb_ref_imgs=args.sequence_length - 1, output_exp=True,
                                              output_pixel_pose=False, output_disp=False).cuda()
@@ -111,8 +112,8 @@ def main():
     shifts.pop(demi_length)
 
 
-    #for i in range(demi_length,len(imgs)-demi_length):
-    for i in range(828,829):
+    for i in range(demi_length,len(imgs)-demi_length):
+    #for i in range(828,829):
 
         file =File()
         file.namebase=os.path.basename(imgs[i]).replace('.jpg','')
@@ -140,9 +141,9 @@ def main():
             img = (img / 255 ).cuda()
             ref_imgs = [(im / 255 ).cuda() for im in ref_imgs]
 
-
-            #msg=None
             msg = 'debug'
+            msg=None
+
             if args.arch=='ecn':
                 output= disp_net(img,msg)#,msg#,raw_disp
             else:
@@ -155,9 +156,10 @@ def main():
 
             output_depth = 1 / output
 
+
             if args.pretrained_posenet is not None:
                 if args.arch=='ecn':
-                    explainability_mask, pose = pose_net(img, ref_imgs)  # ,raw_disp
+                    explainability_mask, pose = pose_net(img, ref_imgs,msg)  # ,raw_disp
                 else:
                     explainability_mask, explainability_mask2, pixel_pose, output_m, pose= pose_net(img, ref_imgs)#,raw_disp
 
