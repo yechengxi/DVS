@@ -141,10 +141,11 @@ class FeatureDecorr_v3(nn.Module):
 
         x1 = x[:,:c].view(N, int(c/G), G, H, W).permute(2, 0, 1, 3, 4).contiguous().view(G, -1)
         mean1 = x1.mean(-1, keepdim=True)
-        if self.running_mean1 is None or self.running_mean1.size() != mean1.size():
-            self.running_mean1 = Parameter(mean1.data.clone())
 
         if self.track_running_stats:
+            if self.running_mean1 is None:
+                self.running_mean1 = Parameter(mean1.data.clone())
+
             if self.training:
                 mean1= mean1* self.momentum + self.running_mean1.detach() * (1 - self.momentum)
                 self.running_mean1.data = mean1.data.clone()
@@ -154,10 +155,11 @@ class FeatureDecorr_v3(nn.Module):
         x_centerred=x1-mean1
 
         cov=(x_centerred@x_centerred.permute(1,0)/x_centerred.shape[1]+self.eps*torch.eye(G,dtype=x.dtype,device=x.device)).unsqueeze(0)
-        if self.running_cov is None or self.running_cov.size() != cov.size():
-            self.running_cov = Parameter(cov.data.clone())
 
         if self.track_running_stats:
+            if self.running_cov is None or self.running_cov.size() != cov.size():
+                self.running_cov = Parameter(cov.data.clone())
+
             if self.training:
                 cov = cov * self.momentum + self.running_cov.detach() * (1 - self.momentum)
                 self.running_cov.data = cov.data.clone()
@@ -172,11 +174,10 @@ class FeatureDecorr_v3(nn.Module):
             x_tmp=x[:, c:]
             mean2=x_tmp.mean()
 
-
-            if self.running_mean2 is None or self.running_mean2.size() != mean2.size():
-                self.running_mean2 = Parameter(mean2.data.clone())
-
             if  self.track_running_stats:
+                if self.running_mean2 is None:
+                    self.running_mean2 = Parameter(mean2.data.clone())
+
                 if self.training:
                     mean2 = mean2 * self.momentum + self.running_mean2.detach() * (1 - self.momentum)
                     self.running_mean2.data = mean2.data.clone()
@@ -186,7 +187,7 @@ class FeatureDecorr_v3(nn.Module):
             x_tmp=x_tmp-mean2
 
             var=((x_tmp)**2).mean()
-            if self.running_var is None or self.running_var.size() != var.size():
+            if self.running_var is None:
                 self.running_var = Parameter(var.data.clone())
 
             if self.track_running_stats:
