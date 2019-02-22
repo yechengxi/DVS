@@ -16,8 +16,7 @@ class GroupNorm(nn.Module):
         G = self.num_groups
         c=int(C/G)*G
         if c==0:
-            c=C
-            G=C
+            c,G=C,C
 
         x1=x[:,:c].view(N,G,-1)
         mean = x1.mean(-1, keepdim=True)
