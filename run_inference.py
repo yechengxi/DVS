@@ -15,6 +15,8 @@ from utils import tensor2array
 from inverse_warp import *
 from flowlib import *
 
+from timeit import default_timer as timer
+
 parser = argparse.ArgumentParser(description='Inference script for DispNet learned with \
                                  Structure from Motion Learner inference on KITTI and CityScapes Dataset',
                                  formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -111,7 +113,10 @@ def main():
     shifts = list(range(-demi_length, demi_length + 1))
     shifts.pop(demi_length)
 
-
+    counter=0
+    depth_time = 0.
+    pose_time = 0.
+    warp_time = 0.
     for i in range(demi_length,len(imgs)-demi_length):
     #for i in range(828,829):
 
@@ -144,11 +149,16 @@ def main():
             msg = 'debug'
             msg=None
 
+            counter+=1
+            start = timer()
+
             if args.arch=='ecn':
                 output= disp_net(img,msg)#,msg#,raw_disp
             else:
                 output = disp_net(img)
+            end = timer()
 
+            depth_time+=end-start
             # normalize the depth
             b = 1
             mean_disp = output[0].view(b, -1).mean(-1).view(b, 1, 1, 1)*0.1
@@ -158,19 +168,28 @@ def main():
 
 
             if args.pretrained_posenet is not None:
+                start = timer()
+
                 if args.arch=='ecn':
                     explainability_mask, pose = pose_net(img, ref_imgs,msg)  # ,raw_disp
                 else:
                     explainability_mask, explainability_mask2, pixel_pose, output_m, pose= pose_net(img, ref_imgs)#,raw_disp
+
+                end = timer()
+
+                pose_time += end - start
+
+                start = timer()
 
                 if args.arch=='ecn':
                     _, ego_flow = get_new_grid(output_depth[0], pose[:,int((args.sequence_length-1)/2)], intrinsics, intrinsics_inv)
                 else:
                     _, ego_flow = inverse_warp(ref_imgs[int((args.sequence_length-1)/2)], output_depth[:, 0], pose[:,int((args.sequence_length-1)/2)], intrinsics,
                                                intrinsics_inv, 'euler', 'border')
+                end = timer()
+                warp_time += end - start
 
                 np.save(output_dir / 'ego_pose_{}{}'.format(file.namebase, '.npy'),pose[0].cpu().data.numpy())
-
 
                 ego_flow=ego_flow[0].data.cpu().numpy()
                 write_flow(ego_flow,output_dir / 'ego_flow_{}{}'.format(file.namebase, '.flo'))
@@ -191,6 +210,7 @@ def main():
                 cat_im=np.concatenate((img0,disp),axis=1)
             imsave(output_dir / 'cat_{}{}'.format(file.namebase, file.ext), cat_im)
 
+    print('inputs: ', counter,', network time: ', depth_time+pose_time, ', depth net time: ',depth_time,' pose net time: ',pose_time,', warping time: ', warp_time)
 
 if __name__ == '__main__':
     main()

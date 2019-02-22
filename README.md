@@ -10,64 +10,52 @@ data_dir=/home/cxy/Data/DVS/MVSEC
 data_dir=/vulcan/scratch/cxy/Data/DVS/MVSEC/
 
 1. full ecn with fd
-CUDA_VISIBLE_DEVICES=0,1 python main.py $data_dir -j 32 -m.1 --batch-size 32 -f 50 --lr 1e-2  --sequence-length 5 --log-output --simple  --with-gt  --norm-type fd --final-map-size 4 --epochs 50 >seq5.fd.log&
+CUDA_VISIBLE_DEVICES=0,1 python main.py $data_dir -j 32 -m.1 --batch-size 32 -f 50 --lr 1e-2  --sequence-length 5 --log-output  --with-gt  --norm-type fd --final-map-size 4 --epochs 50 >seq5.fd.log&
 2. tiny ecn with fd
-CUDA_VISIBLE_DEVICES=2,3 python main.py $data_dir -j 32 -m.101 --batch-size 32 -f 50 --lr 1e-2  --sequence-length 5 --log-output --simple  --with-gt  --norm-type fd --n-channel 8 --growth-rate 8 --final-map-size 4 --epochs 50 >seq5.fd.tiny.log&
+CUDA_VISIBLE_DEVICES=2,3 python main.py $data_dir -j 32 -m.101 --batch-size 32 -f 50 --lr 1e-2  --sequence-length 5 --log-output  --with-gt  --norm-type fd --n-channel 8 --growth-rate 8 --final-map-size 4 --epochs 50 >seq5.fd.tiny.log&
 3. ecn with bn
-CUDA_VISIBLE_DEVICES=4,5 python main.py $data_dir -j 32 -m.1 --batch-size 32 -f 50 --lr 1e-2  --sequence-length 5 --log-output --simple  --with-gt  --norm-type bn --final-map-size 4 --epochs 50 >seq5.bn.log&
+CUDA_VISIBLE_DEVICES=4,5 python main.py $data_dir -j 32 -m.1 --batch-size 32 -f 50 --lr 1e-2  --sequence-length 5 --log-output  --with-gt  --norm-type bn --final-map-size 4 --epochs 50 >seq5.bn.log&
 4. ecn with gn
-CUDA_VISIBLE_DEVICES=6,7 python main.py $data_dir -j 32 -m.1 --batch-size 32 -f 50 --lr 1e-2  --sequence-length 5 --log-output --simple  --with-gt  --norm-type gn --final-map-size 4 --epochs 50 >seq5.gn.log&
+CUDA_VISIBLE_DEVICES=6,7 python main.py $data_dir -j 32 -m.1 --batch-size 32 -f 50 --lr 1e-2  --sequence-length 5 --log-output  --with-gt  --norm-type gn --final-map-size 4 --epochs 50 >seq5.gn.log&
 
 
 data_dir=/vulcan/scratch/cxy/Data/DVS/MVSEC/
 
 1. tiny ecn with fd
-CUDA_VISIBLE_DEVICES=4,5,6,7 python main.py $data_dir -j 32 -m.1001 --batch-size 32 -f 100 --lr 1e-2  --sequence-length 5 --log-output --simple  --with-gt  --norm-type fd  --epochs 30 >outdoor.fd.log&
+CUDA_VISIBLE_DEVICES=4,5,6,7 python main.py $data_dir -j 32 -m.1001 --batch-size 32 -f 100 --lr 1e-2  --sequence-length 5 --log-output  --with-gt  --norm-type fd  --epochs 30 >outdoor.fd.log&
 2. tiny ecn with bn
-CUDA_VISIBLE_DEVICES=0,1,2,3 python main.py $data_dir -j 32 -m.1001 --batch-size 32 -f 100 --lr 1e-2  --sequence-length 5 --log-output --simple  --with-gt  --norm-type bn --epochs 30 >outdoor.bn.log&
+CUDA_VISIBLE_DEVICES=0,1,2,3 python main.py $data_dir -j 32 -m.1001 --batch-size 32 -f 100 --lr 1e-2  --sequence-length 5 --log-output  --with-gt  --norm-type bn --epochs 30 >outdoor.bn.log&
 3. tiny ecn with gn
-CUDA_VISIBLE_DEVICES=4,5,6,7 python main.py $data_dir -j 32 -m.1001 --batch-size 32 -f 100 --lr 1e-2  --sequence-length 5 --log-output --simple  --with-gt  --norm-type gn --epochs 30 >outdoor.gn.log&
+CUDA_VISIBLE_DEVICES=4,5,6,7 python main.py $data_dir -j 32 -m.1001 --batch-size 32 -f 100 --lr 1e-2  --sequence-length 5 --log-output  --with-gt  --norm-type gn --epochs 30 >outdoor.gn.log&
 
 4. fd g8
-CUDA_VISIBLE_DEVICES=0,1,2,3 python main.py $data_dir -j 32 -m.1001 --batch-size 32 -f 100 --lr 1e-2  --sequence-length 5 --log-output --simple  --with-gt  --norm-type fd --norm-group 8 --epochs 30 >outdoor.fd.g8.log&
+CUDA_VISIBLE_DEVICES=0,1,2,3 python main.py $data_dir -j 32 -m.1001 --batch-size 32 -f 100 --lr 1e-2  --sequence-length 5 --log-output  --with-gt  --norm-type fd --norm-group 8 --epochs 30 >outdoor.fd.g8.log&
 
 
 ###outdoor day2
 data_dir=/vulcan/scratch/cxy/Data/DVS/MVSEC/outdoor_day_2/
-CUDA_VISIBLE_DEVICES=0,1 python main.py $data_dir -j 32 -m.101 --batch-size 32 -f 100 --lr 1e-3  --sequence-length 5 --log-output --simple  --with-gt  --norm-type fd --final-map-size 4 --epochs 20 >outdoor_day2.fd.lr.001.log&
-CUDA_VISIBLE_DEVICES=2,3 python main.py $data_dir -j 32 -m.101 --batch-size 32 -f 100 --lr 1e-3  --sequence-length 5 --log-output --simple  --with-gt  --norm-type fd_v3 --final-map-size 4 --epochs 20 >outdoor_day2.fd_v3.lr.001.log&
 
 
 
+CUDA_VISIBLE_DEVICES=6,7 python main.py $data_dir -j 16 -m.1 --batch-size 32 -f 100 --lr 1e-2  --sequence-length 3 --log-output  --with-gt  --norm-type fd --final-map-size 4 --epochs 20 >outdoor_day2.fd.seq3.log&
 
-CUDA_VISIBLE_DEVICES=0,1 python main.py $data_dir -j 32 -m.1 --batch-size 32 -f 100 --lr 1e-2  --sequence-length 3 --log-output --simple  --with-gt  --norm-type fd --final-map-size 4 --epochs 20 >outdoor_day2.fd.seq3.log&
+CUDA_VISIBLE_DEVICES=2,3 python main.py $data_dir -j 32 -m.1 --batch-size 32 -f 100 --lr 1e-2  --sequence-length 7 --log-output  --with-gt  --norm-type fd --final-map-size 4 --epochs 20 >outdoor_day2.fd.seq7.log&
 
-CUDA_VISIBLE_DEVICES=2,3 python main.py $data_dir -j 32 -m.1 --batch-size 32 -f 100 --lr 1e-2  --sequence-length 7 --log-output --simple  --with-gt  --norm-type fd --final-map-size 4 --epochs 20 >outdoor_day2.fd.seq7.log&
-
-CUDA_VISIBLE_DEVICES=4,5 python main.py $data_dir -j 32 -m.1 --batch-size 32 -f 100 --lr 1e-2  --sequence-length 9 --log-output --simple  --with-gt  --norm-type fd --final-map-size 4 --epochs 20 >outdoor_day2.fd.seq9.log&
+CUDA_VISIBLE_DEVICES=4,5 python main.py $data_dir -j 16 -m.1 --batch-size 32 -f 100 --lr 1e-2  --sequence-length 9 --log-output  --with-gt  --norm-type fd --final-map-size 4 --epochs 20 >outdoor_day2.fd.seq9.log&
 
 
 
 1. tiny ecn with fd
 CUDA_VISIBLE_DEVICES=0,1,2,3 python main.py $data_dir -j 32 -m.1 --batch-size 32 -f 100 --lr 1e-2  --sequence-length 5 --log-output  --with-gt --norm-type fd --epochs 30 >fd.log&
-
 2. tiny ecn with bn
-CUDA_VISIBLE_DEVICES=0,1 python main.py $data_dir -j 32 -m.1 --batch-size 32 -f 100 --lr 1e-2  --sequence-length 5 --log-output --simple  --with-gt  --norm-type bn --epochs 30 >bn.log&
+CUDA_VISIBLE_DEVICES=4,5 python main.py $data_dir -j 32 -m.1 --batch-size 32 -f 100 --lr 1e-2  --sequence-length 5 --log-output --with-gt  --norm-type bn --epochs 30 >bn.log&
 3. tiny ecn with gn
-CUDA_VISIBLE_DEVICES=2,3 python main.py $data_dir -j 32 -m.1 --batch-size 32 -f 100 --lr 1e-2  --sequence-length 5 --log-output --simple  --with-gt  --norm-type gn --epochs 30 >gn.log&
-
+CUDA_VISIBLE_DEVICES=6,7 python main.py $data_dir -j 32 -m.1 --batch-size 16 -f 100 --lr 1e-2  --sequence-length 5 --log-output --with-gt  --norm-type gn --epochs 30 >gn.log&
 4. fd g8
-CUDA_VISIBLE_DEVICES=0,1 python main.py $data_dir -j 32 -m.101 --batch-size 32 -f 100 --lr 1e-2  --sequence-length 5 --log-output --simple  --with-gt  --norm-type fd --norm-group 8 --epochs 30 >fd.g8.log&
-CUDA_VISIBLE_DEVICES=2,3 python main.py $data_dir -j 32 -m.101 --batch-size 32 -f 100 --lr 1e-2  --sequence-length 5 --log-output --simple  --with-gt  --norm-type fd_v2 --norm-group 8 --epochs 30 >fd_v2.g8.log&
-CUDA_VISIBLE_DEVICES=2,3 python main.py $data_dir -j 32 -m.101 --batch-size 32 -f 100 --lr 1e-2  --sequence-length 5 --log-output --simple  --with-gt  --norm-type fd_v3 --norm-group 8 --epochs 30 >fd_v3.g8.log&
+CUDA_VISIBLE_DEVICES=0,1 python main.py $data_dir -j 32 -m.101 --batch-size 32 -f 100 --lr 1e-2  --sequence-length 5 --log-output  --with-gt  --norm-type fd --norm-group 8 --epochs 30 >fd.g8.log&
 
-CUDA_VISIBLE_DEVICES=2,3 python main.py $data_dir -j 32 -m.101 --batch-size 32 -f 100 --lr 1e-2  --sequence-length 5 --log-output --simple  --with-gt  --norm-type fd_v3 --epochs 30 >fd_v3.log&
 
-5. fd g32
-CUDA_VISIBLE_DEVICES=6,7 python main.py $data_dir -j 32 -m.101 --batch-size 32 -f 100 --lr 1e-2  --sequence-length 5 --log-output --simple  --with-gt  --norm-type fd --norm-group 32 --epochs 30 >fd.g32.log&
-5. fd g64
-CUDA_VISIBLE_DEVICES=3,4 python main.py $data_dir -j 32 -m.101 --batch-size 32 -f 100 --lr 1e-2  --sequence-length 5 --log-output --simple  --with-gt  --norm-type fd --norm-group 64 --epochs 30 >fd.g64.log&
-
+CUDA_VISIBLE_DEVICES=2,3 python main.py $data_dir -j 32 -m.101 --batch-size 32 -f 100 --lr 1e-2  --sequence-length 5 --log-output  --with-gt  --norm-type fd_v3 --epochs 30 >fd_v3.log&
 
 
 
@@ -106,17 +94,17 @@ CUDA_VISIBLE_DEVICES=0 python run_inference.py --dataset-dir $dataset_dir --pret
 
 ##indoor
 data_dir=/vulcan/scratch/cxy/Data/DVS/indoor
-CUDA_VISIBLE_DEVICES=0,1,2,3 python main.py $data_dir -j 32 -m.1 --batch-size 32 -f 50 --lr 1e-2  --sequence-length 5 --log-output --simple  --with-gt  --norm-type fd --final-map-size 4 --epochs 50 >indoor.log&
-CUDA_VISIBLE_DEVICES=4,5,6,7 python main.py $data_dir -j 32 -m.101 --batch-size 32 -f 50 --lr 1e-2  --sequence-length 5 --log-output --simple  --with-gt  --norm-type fd --n-channel 8 --growth-rate 8 --final-map-size 4 --epochs 50 >indoor.tiny.log&
+CUDA_VISIBLE_DEVICES=0,1,2,3 python main.py $data_dir -j 32 -m.1 --batch-size 32 -f 50 --lr 1e-2  --sequence-length 5 --log-output  --with-gt  --norm-type fd --final-map-size 4 --epochs 50 >indoor.log&
+CUDA_VISIBLE_DEVICES=4,5,6,7 python main.py $data_dir -j 32 -m.101 --batch-size 32 -f 50 --lr 1e-2  --sequence-length 5 --log-output  --with-gt  --norm-type fd --n-channel 8 --growth-rate 8 --final-map-size 4 --epochs 50 >indoor.tiny.log&
 
-CUDA_VISIBLE_DEVICES=0,1,2,3 python main.py $data_dir -j 32 -m.101 --batch-size 32 -f 50 --lr 1e-2  --sequence-length 5 --log-output --simple  --with-gt  --norm-type fd --n-channel 4 --growth-rate 4 --final-map-size 8 --epochs 50 >indoor.super.tiny.log&
+CUDA_VISIBLE_DEVICES=0,1,2,3 python main.py $data_dir -j 32 -m.101 --batch-size 32 -f 50 --lr 1e-2  --sequence-length 5 --log-output  --with-gt  --norm-type fd --n-channel 4 --growth-rate 4 --final-map-size 8 --epochs 50 >indoor.super.tiny.log&
 
-CUDA_VISIBLE_DEVICES=4,5,6,7 python main.py $data_dir -j 32 -m.103 --batch-size 32 -f 50 --lr 1e-2  --sequence-length 5 --log-output --simple  --with-gt  --norm-type fd --n-channel 4 --growth-rate 4 --final-map-size 8 --scale-factor .3 --epochs 50 >indoor.super.super.tiny.log&
+CUDA_VISIBLE_DEVICES=4,5,6,7 python main.py $data_dir -j 32 -m.103 --batch-size 32 -f 50 --lr 1e-2  --sequence-length 5 --log-output  --with-gt  --norm-type fd --n-channel 4 --growth-rate 4 --final-map-size 8 --scale-factor .3 --epochs 50 >indoor.super.super.tiny.log&
 
 
 ##tiny things
-CUDA_VISIBLE_DEVICES=4,5,6,7 python main.py $data_dir -j 32 -m.102 --batch-size 32 -f 50 --lr 1e-2  --sequence-length 5 --log-output --simple  --with-gt  --norm-type fd --n-channel 4 --growth-rate 4 --final-map-size 8 --epochs 50 >outdoor.super.tiny.log&
+CUDA_VISIBLE_DEVICES=4,5,6,7 python main.py $data_dir -j 32 -m.102 --batch-size 32 -f 50 --lr 1e-2  --sequence-length 5 --log-output  --with-gt  --norm-type fd --n-channel 4 --growth-rate 4 --final-map-size 8 --epochs 50 >outdoor.super.tiny.log&
 
-CUDA_VISIBLE_DEVICES=0,1,2,3 python main.py $data_dir -j 32 -m.103 --batch-size 32 -f 50 --lr 1e-2  --sequence-length 5 --log-output --simple  --with-gt  --norm-type fd --n-channel 4 --growth-rate 4 --final-map-size 8 --scale-factor .3 --epochs 50 >outdoor.super.super.tiny.log&
+CUDA_VISIBLE_DEVICES=0,1,2,3 python main.py $data_dir -j 32 -m.103 --batch-size 32 -f 50 --lr 1e-2  --sequence-length 5 --log-output  --with-gt  --norm-type fd --n-channel 4 --growth-rate 4 --final-map-size 8 --scale-factor .3 --epochs 50 >outdoor.super.super.tiny.log&
 
-CUDA_VISIBLE_DEVICES=0,1,2,3 python main.py $data_dir -j 32 -m.102 --batch-size 32 -f 50 --lr 1e-2  --sequence-length 5 --log-output --simple  --with-gt  --norm-type fd --norm-group 8 --n-channel 4 --growth-rate 4 --final-map-size 8 --epochs 50 >outdoor.super.tiny.g8.log&
+CUDA_VISIBLE_DEVICES=0,1,2,3 python main.py $data_dir -j 32 -m.102 --batch-size 32 -f 50 --lr 1e-2  --sequence-length 5 --log-output  --with-gt  --norm-type fd --norm-group 8 --n-channel 4 --growth-rate 4 --final-map-size 8 --epochs 50 >outdoor.super.tiny.g8.log&
