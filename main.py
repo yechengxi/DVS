@@ -84,7 +84,7 @@ parser.add_argument('--log-output', action='store_true', help='will log dispnet 
 
 parser.add_argument('-f', '--training-output-freq', type=int, help='frequence for outputting dispnet outputs and warped imgs at training for all scales if 0 will not output',
                     metavar='N', default=0)
-parser.add_argument('--simple', action='store_true',help='use simple warping')
+parser.add_argument('--simple',  default=True ,help='use simple warping')
 
 #optimizer
 parser.add_argument('--optimizer', default='Adam', help='optimizer(SGD|Adam)')
