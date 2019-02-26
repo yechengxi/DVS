@@ -55,7 +55,7 @@ parser.add_argument('--with-gt', action='store_true', help='use ground truth for
 parser.add_argument('-j', '--workers', default=16, type=int, metavar='N',
                     help='number of data loading workers')
 
-parser.add_argument('-c','--n-motions', default=3, type=int, metavar='N',
+parser.add_argument('-c','--n-motions', default=4, type=int, metavar='N',
                     help='number of independent motions')
 
 parser.add_argument('--epochs', default=20, type=int, metavar='N',
