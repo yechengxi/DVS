@@ -55,6 +55,9 @@ CUDA_VISIBLE_DEVICES=6,7 python main.py $data_dir -j 32 -m.1 --batch-size 16 -f 
 CUDA_VISIBLE_DEVICES=0,1 python main.py $data_dir -j 32 -m.101 --batch-size 32 -f 100 --lr 1e-2  --sequence-length 5 --log-output  --with-gt  --norm-type fd --norm-group 8 --epochs 30 >fd.g8.log&
 
 
+
+CUDA_VISIBLE_DEVICES=0,1 python main.py $data_dir -j 32 -m.1 --batch-size 32 -f 100 --lr 1e-2  --sequence-length 5 --log-output  --with-gt --norm-type fd --epochs 30 --p1 >fd.p1.log&
+
 CUDA_VISIBLE_DEVICES=2,3 python main.py $data_dir -j 32 -m.101 --batch-size 32 -f 100 --lr 1e-2  --sequence-length 5 --log-output  --with-gt  --norm-type fd_v3 --epochs 30 >fd_v3.log&
 
 

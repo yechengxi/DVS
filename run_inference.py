@@ -98,12 +98,10 @@ def main():
 
     intrinsics = torch.from_numpy(intrinsics).unsqueeze(0).cuda()
     intrinsics_inv = torch.from_numpy(intrinsics_inv).unsqueeze(0).cuda()
-    #imgs = sorted(glob.glob(scene + '_cmb_*.jpg'))
     imgs = sorted(glob.glob(os.path.join(scene , '*.jpg')))
 
     print('{} files to test'.format(len(imgs)))
 
-    #for file in tqdm(test_files):
 
     class File:
         basename=None
@@ -118,6 +116,7 @@ def main():
     pose_time = 0.
     warp_time = 0.
     for i in range(demi_length,len(imgs)-demi_length):
+    #for i in range(demi_length,50):
     #for i in range(828,829):
 
         file =File()
@@ -170,6 +169,7 @@ def main():
             if args.pretrained_posenet is not None:
                 start = timer()
 
+
                 if args.arch=='ecn':
                     explainability_mask, pose = pose_net(img, ref_imgs,msg)  # ,raw_disp
                 else:
@@ -193,7 +193,6 @@ def main():
 
                 ego_flow=ego_flow[0].data.cpu().numpy()
                 write_flow(ego_flow,output_dir / 'ego_flow_{}{}'.format(file.namebase, '.flo'))
-                #tmp=read_flow(output_dir / 'ego_flow_{}{}'.format(file.namebase, '.flo'))
                 ego_flow = flow_to_image(ego_flow)
                 imsave(output_dir / 'ego_flow_{}{}'.format(file.namebase, file.ext), ego_flow)
 

@@ -11,6 +11,7 @@ def visualize_all_maps(out,msg):
     channels=[out[i].shape[1] for i in range(len(out))]
 
     growth_rate=out[-1].shape[1]-out[-2].shape[1]
+
     max_c=min(8,growth_rate)
     n_layers=len(out)
 
