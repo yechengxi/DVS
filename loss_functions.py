@@ -161,18 +161,46 @@ class explainability_loss(nn.Module):
             loss += (dx.abs().view(N, -1).mean(1) + dy.abs().view(N, -1).mean(1)) * H * W
 
             if C>1:
-                #loss += 1*torch.pow(mask_scaled,.5).view(N, -1).mean(1) * H * W *C#check this!
-                #print('s',mask_scaled.min().item(),mask_scaled.max().item())
-                #m=((mask_scaled<0.8)*(mask_scaled>0.2)).sum().item()
-                #print(m/N/C/H/W)
                 mask_scaled=mask_scaled[:, :1]
                 ones_var = (F.adaptive_avg_pool2d(gt_mask.type_as(mask_scaled), (H, W)) < 0.01).type_as(mask_scaled)#background_mask
 
             else:
                 ones_var = (F.adaptive_avg_pool2d(gt_mask.type_as(mask_scaled),(H,W))>0.01).type_as(mask_scaled)#foreground mask
-            #print(mask_scaled.min().item(),mask_scaled.max().item(),ones_var.min().item(),ones_var.max().item())
 
             loss += nn.functional.binary_cross_entropy(mask_scaled, ones_var)*H*W
+            weight+=H*W
+        return loss/weight
+
+class explainability_loss_new(nn.Module):
+    def __init__(self):
+        super(explainability_loss_new, self).__init__()
+    def forward(self,mask,gt_mask):
+        def gradient(pred):
+            D_dy = pred[:, :, 1:] - pred[:, :, :-1]
+            D_dx = pred[:, :, :, 1:] - pred[:, :, :, :-1]
+            return D_dx, D_dy
+
+        if type(mask) not in [tuple, list]:
+            mask = [mask]
+        gt_mask=torch.round(gt_mask).type_as(mask[0])
+
+        loss = 0
+        weight=0
+        for mask_scaled in mask:
+            N,C,H,W=mask_scaled.shape
+            mask_scaled=torch.clamp(mask_scaled, min=0.001, max=0.999)
+
+            if min(H,W)<4:
+                continue
+            dx, dy = gradient(mask_scaled)
+            loss += (dx.abs().view(N, -1).mean(1) + dy.abs().view(N, -1).mean(1)) * H * W
+
+
+
+            for c in range(C):
+                ones_var = (F.adaptive_avg_pool2d((torch.round(gt_mask)==c).type_as(mask_scaled), (H, W)) ).type_as(mask_scaled)
+                loss = loss+ nn.functional.binary_cross_entropy(mask_scaled[:, c:c+1], ones_var)*H*W
+                #print(c,ones_var.sum().item())
             weight+=H*W
         return loss/weight
 

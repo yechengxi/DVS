@@ -275,6 +275,9 @@ def main():
     args.explainability_loss=explainability_loss().cuda()
     args.explainability_loss = torch.nn.DataParallel(args.explainability_loss)
 
+    args.explainability_loss_new=explainability_loss_new().cuda()
+    args.explainability_loss_new = torch.nn.DataParallel(args.explainability_loss_new)
+
     args.pose_smooth_loss=pose_smooth_loss().cuda()
     args.pose_smooth_loss = torch.nn.DataParallel(args.pose_smooth_loss)
 
@@ -445,7 +448,8 @@ def train(args, train_loader, disp_net, pose_exp_net,optimizer, epoch_size,  tra
             w2=0
 
         if w2 > 0:
-            loss_2 = args.explainability_loss(explainability_mask,gt_mask).mean()
+            #loss_2 = args.explainability_loss(explainability_mask,gt_mask).mean()
+            loss_2 = args.explainability_loss_new(explainability_mask,gt_mask).mean()
         else:
             loss_2 = 0
 
@@ -573,8 +577,8 @@ def train(args, train_loader, disp_net, pose_exp_net,optimizer, epoch_size,  tra
                                                    tensor2array(mask, max_value=1,
                                                                 colormap='bone'), n_iter)
                     if k==0:
-                        if (explainability_mask[0].shape[1]>=4):
-                            mask=explainability_mask[0][0, 1:4].data.cpu()
+                        if (explainability_mask[0].shape[1]>=3):
+                            mask=explainability_mask[0][0, 0:3].data.cpu()
                             train_writer.add_image('train Exp components',
                                                    tensor2array(mask, max_value=1,
                                                                 colormap='bone'), n_iter)
