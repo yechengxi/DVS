@@ -182,7 +182,7 @@ class explainability_loss_new(nn.Module):
 
         if type(mask) not in [tuple, list]:
             mask = [mask]
-        gt_mask=torch.round(gt_mask).type_as(mask[0])
+        gt_mask=torch.round(gt_mask).long()
 
         loss = 0
         weight=0
@@ -195,11 +195,17 @@ class explainability_loss_new(nn.Module):
             dx, dy = gradient(mask_scaled)
             loss += (dx.abs().view(N, -1).mean(1) + dy.abs().view(N, -1).mean(1)) * H * W
 
-
-
+            gt=F.adaptive_avg_pool2d(gt_mask.float(),(H, W)).long()
+            w=torch.FloatTensor(C)
             for c in range(C):
-                ones_var = (F.adaptive_avg_pool2d((torch.round(gt_mask)==c).type_as(mask_scaled), (H, W)) ).type_as(mask_scaled)
-                loss = loss+ nn.functional.binary_cross_entropy(mask_scaled[:, c:c+1], ones_var)*H*W
+                w[c]=1/(((gt==c).sum()/N+1).float())
+            #print(nn.functional.cross_entropy(mask_scaled, gt[:,0],weight=w.type_as(mask_scaled)),nn.functional.cross_entropy(mask_scaled, gt[:,0]))
+            loss = loss+ nn.functional.cross_entropy(mask_scaled, gt[:,0],weight=w.type_as(mask_scaled))*H*W
+
+
+            #for c in range(C):
+            #    ones_var = (F.adaptive_avg_pool2d((torch.round(gt_mask)==c).type_as(mask_scaled), (H, W)) ).type_as(mask_scaled)
+            #    loss = loss+ nn.functional.binary_cross_entropy(mask_scaled[:, c:c+1], ones_var)*H*W
                 #print(c,ones_var.sum().item())
             weight+=H*W
         return loss/weight
