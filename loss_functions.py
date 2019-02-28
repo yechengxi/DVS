@@ -210,6 +210,45 @@ class explainability_loss_new(nn.Module):
             weight+=H*W
         return loss/weight
 
+class explainability_loss_new2(nn.Module):
+    def __init__(self):
+        super(explainability_loss_new2, self).__init__()
+
+    def forward(self, mask, gt_mask):
+        def gradient(pred):
+            D_dy = pred[:, :, 1:] - pred[:, :, :-1]
+            D_dx = pred[:, :, :, 1:] - pred[:, :, :, :-1]
+            return D_dx, D_dy
+
+        if type(mask) not in [tuple, list]:
+            mask = [mask]
+        gt_mask = torch.round(gt_mask).long()
+
+        loss = 0
+        weight = 0
+        for mask_scaled in mask:
+            N, C, H, W = mask_scaled.shape
+            mask_scaled = torch.clamp(mask_scaled, min=0.001, max=0.999)
+
+            if min(H, W) < 4:
+                continue
+            dx, dy = gradient(mask_scaled)
+            loss += (dx.abs().view(N, -1).mean(1) + dy.abs().view(N, -1).mean(1)) * H * W
+
+            gt = F.adaptive_avg_pool2d(gt_mask.float(), (H, W)).long()
+            w = H*W/((gt == 0).view(N,-1).sum(-1)+1)
+            w=w/sum(w)
+
+            mask_scaled=mask_scaled[:, :1]
+            ones_var = (F.adaptive_avg_pool2d(gt_mask.type_as(mask_scaled), (H, W)) < 0.01).long()#background_mask
+
+            loss += nn.functional.binary_cross_entropy(mask_scaled, ones_var,weight=w)*H*W
+
+
+
+            weight += H * W
+        return loss / weight
+
 
 class depth_loss(nn.Module):
     def __init__(self):

@@ -129,6 +129,8 @@ parser.add_argument("--dataset-list", default=None, type=str, help="Dataset list
 
 parser.add_argument("--scale", default=1., type=float, help="rescaling factor")
 
+parser.add_argument('--debug', action='store_true', help='debug mode.')
+
 best_error = -1
 n_iter = 0
 
@@ -275,8 +277,8 @@ def main():
     args.explainability_loss=explainability_loss().cuda()
     args.explainability_loss = torch.nn.DataParallel(args.explainability_loss)
 
-    args.explainability_loss_new=explainability_loss_new().cuda()
-    args.explainability_loss_new = torch.nn.DataParallel(args.explainability_loss_new)
+    args.explainability_loss_new2=explainability_loss_new2().cuda()
+    args.explainability_loss_new2 = torch.nn.DataParallel(args.explainability_loss_new2)
 
     args.pose_smooth_loss=pose_smooth_loss().cuda()
     args.pose_smooth_loss = torch.nn.DataParallel(args.pose_smooth_loss)
@@ -448,8 +450,10 @@ def train(args, train_loader, disp_net, pose_exp_net,optimizer, epoch_size,  tra
             w2=0
 
         if w2 > 0:
-            loss_2 = args.explainability_loss(explainability_mask,gt_mask).mean()
-            #loss_2 = args.explainability_loss_new(explainability_mask,gt_mask).mean()
+            if not args.debug:
+                loss_2 = args.explainability_loss(explainability_mask,gt_mask).mean()
+            else:
+                loss_2 = args.explainability_loss_new2(explainability_mask,gt_mask).mean()
         else:
             loss_2 = 0
 

@@ -267,3 +267,12 @@ CUDA_VISIBLE_DEVICES=0,1,2,3 python main.py $data_dir -j32 -d0.5  --batch-size 6
 
 
 CUDA_VISIBLE_DEVICES=0,1,2,3 python main.py $data_dir -j32 -d0.5  --batch-size 64 -f 100 --lr 1e-2 --sequence-length 5 --log-output --with-gt  --epochs 20 --norm-type fd >ecn_fd_full_new.log &
+
+
+python main.py $data_dir -j32 -d0.5  --batch-size 64 -f 100 --lr 1e-2 --sequence-length 5 --log-output --with-gt  --epochs 50 --norm-type bn >ecn_bn_full_new.log &
+
+
+disp_dir=checkpoints/anton,20epochs,archecn,seq5,sl0,b64,cosine,Adam,lr0.01,m1,c4,d0.5,s1.0,p1,o0.0,pixelwiseFalse,t0.05,fd/02-27-19:57/dispnet_checkpoint.pth.tar
+pose_dir=checkpoints/anton,20epochs,archecn,seq5,sl0,b64,cosine,Adam,lr0.01,m1,c4,d0.5,s1.0,p1,o0.0,pixelwiseFalse,t0.05,fd/02-27-19:57/exp_pose_checkpoint.pth.tar
+
+python main.py $data_dir -j32 -d0.5  --batch-size 64 -f 100 --lr 1e-2 --sequence-length 5 --log-output --with-gt  --epochs 50 --norm-type fd --pretrained-dispnet $disp_dir --pretrained-posenet $pose_dir >ecn_fd_full_new2.log &

@@ -30,6 +30,7 @@ def save_path_formatter(args, parser):
     keys_with_prefix['pixelpose'] = 'pixelwise'
     keys_with_prefix['duration'] = 't'
     keys_with_prefix['norm_type'] = ''
+    keys_with_prefix['debug'] = 'debug'
 
 
 
