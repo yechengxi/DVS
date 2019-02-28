@@ -448,8 +448,8 @@ def train(args, train_loader, disp_net, pose_exp_net,optimizer, epoch_size,  tra
             w2=0
 
         if w2 > 0:
-            #loss_2 = args.explainability_loss(explainability_mask,gt_mask).mean()
-            loss_2 = args.explainability_loss_new(explainability_mask,gt_mask).mean()
+            loss_2 = args.explainability_loss(explainability_mask,gt_mask).mean()
+            #loss_2 = args.explainability_loss_new(explainability_mask,gt_mask).mean()
         else:
             loss_2 = 0
 

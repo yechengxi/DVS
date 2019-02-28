@@ -261,6 +261,9 @@ CUDA_VISIBLE_DEVICES=0 python run_inference.py --img-height 260 --img-width 346 
 
 
 
-data_dir=/vulcan/scratch/anton
+data_dir=/vulcan/scratch/anton/EV-IMO-learning
 
 CUDA_VISIBLE_DEVICES=0,1,2,3 python main.py $data_dir -j32 -d0.5  --batch-size 64 -f 100 --lr 1e-2 --sequence-length 5 --log-output --with-gt  --epochs 20 --norm-type bn >ecn_bn_full.log &
+
+
+CUDA_VISIBLE_DEVICES=0,1,2,3 python main.py $data_dir -j32 -d0.5  --batch-size 64 -f 100 --lr 1e-2 --sequence-length 5 --log-output --with-gt  --epochs 20 --norm-type fd >ecn_fd_full_new.log &
