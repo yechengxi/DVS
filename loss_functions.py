@@ -236,15 +236,13 @@ class explainability_loss_new2(nn.Module):
             loss += (dx.abs().view(N, -1).mean(1) + dy.abs().view(N, -1).mean(1)) * H * W
 
             gt = F.adaptive_avg_pool2d(gt_mask.float(), (H, W)).long()
-            w = H*W/((gt == 0).view(N,-1).sum(-1)+1)
+            w = H*W/((gt == 0).view(N,-1).sum(-1)+1).float()
             w=w/sum(w)
 
             mask_scaled=mask_scaled[:, :1]
-            ones_var = (F.adaptive_avg_pool2d(gt_mask.type_as(mask_scaled), (H, W)) < 0.01).long()#background_mask
+            ones_var = (F.adaptive_avg_pool2d(gt_mask.type_as(mask_scaled), (H, W)) < 0.01).float()#background_mask
 
-            loss += nn.functional.binary_cross_entropy(mask_scaled, ones_var,weight=w)*H*W
-
-
+            loss += nn.functional.binary_cross_entropy(mask_scaled, ones_var,weight=w.view(N,1,1,1))*H*W
 
             weight += H * W
         return loss / weight
