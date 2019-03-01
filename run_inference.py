@@ -12,6 +12,8 @@ from utils import tensor2array
 from inverse_warp import *
 from flowlib import *
 
+from timeit import default_timer as timer
+
 parser = argparse.ArgumentParser(description='Inference script for DispNet learned with \
                                  Structure from Motion Learner inference on KITTI and CityScapes Dataset',
                                  formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -82,7 +84,6 @@ def main():
     output_dir = Path(args.output_dir)
     output_dir.makedirs_p()
 
-
     import os
     import glob
     import time
@@ -116,6 +117,12 @@ def main():
     shifts = list(range(-demi_length, demi_length + 1))
     shifts.pop(demi_length)
 
+    counter=0
+    depth_time = 0.
+    pose_time = 0.
+    warp_time = 0.
+
+
     for i in range(demi_length,len(imgs)-demi_length):
     #for i in range(round(len(imgs)*.9), len(imgs) - demi_length):
     #for i in range(demi_length, round(len(imgs)*0.1 - demi_length)):
@@ -143,12 +150,20 @@ def main():
             img = (img / 255 ).cuda()
             ref_imgs = [(im / 255 ).cuda() for im in ref_imgs]
 
+            counter+=1
+            start = timer()
 
             output= disp_net(img)#,raw_disp
+
+            end = timer()
+            depth_time+=end-start
 
             output_depth = 1 / output
 
             if args.pretrained_posenet is not None:
+
+                start = timer()
+
                 if args.pixelpose:
                     explainability_mask,pose, pixel_pose,final_pose= pose_net(img, ref_imgs)#,raw_disp
                     _, rigid_flow = get_new_grid(output_depth[0], pixel_pose[:1, :], intrinsics, intrinsics_inv)
@@ -166,6 +181,10 @@ def main():
                             explainability_mask[0].cpu().data.numpy().transpose((1,2,0)))
                     exp = (255*tensor2array(1-explainability_mask[0,0].data.cpu(), max_value=None, colormap='bone')).astype(np.uint8).transpose(1,2,0)
 
+                end = timer()
+                pose_time += end - start
+
+                start = timer()
                 _, ego_flow = get_new_grid(output_depth[0], pose[:1,:], intrinsics, intrinsics_inv)
                 _, final_flow = get_new_grid(output_depth[0], final_pose[:1, :], intrinsics, intrinsics_inv)
 
@@ -173,6 +192,8 @@ def main():
                 assert residual_pose[:,:,3:].abs().max().item()<1e-4
                 residual_pose=residual_pose[:,:,:3].cpu().data.numpy()
 
+                end = timer()
+                warp_time += end - start
 
                 final_flow=final_flow[0].data.cpu().numpy()
                 ego_flow=ego_flow[0].data.cpu().numpy()
@@ -201,6 +222,7 @@ def main():
                 cat_im=np.concatenate((img0,disp),axis=1)
             imsave(output_dir / 'cat_{}{}'.format(file.namebase, file.ext), cat_im)
 
+    print('inputs: ', counter,', network time: ', depth_time+pose_time, ', depth net time: ',depth_time,' pose net time: ',pose_time,', warping time: ', warp_time)
 
 if __name__ == '__main__':
     main()

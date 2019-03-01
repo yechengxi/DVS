@@ -276,3 +276,30 @@ disp_dir=checkpoints/anton,20epochs,archecn,seq5,sl0,b64,cosine,Adam,lr0.01,m1,c
 pose_dir=checkpoints/anton,20epochs,archecn,seq5,sl0,b64,cosine,Adam,lr0.01,m1,c4,d0.5,s1.0,p1,o0.0,pixelwiseFalse,t0.05,fd/02-27-19:57/exp_pose_checkpoint.pth.tar
 
 python main.py $data_dir -j32 -d0.5  --batch-size 64 -f 100 --lr 1e-2 --sequence-length 5 --log-output --with-gt  --epochs 50 --norm-type fd --pretrained-dispnet $disp_dir --pretrained-posenet $pose_dir --debug >ecn_fd_full_new_exp.log &
+
+
+
+
+data_dir=/vulcan/scratch/anton/EV-IMO-learning/SET1_CUBE_CAR_PLANE
+dispnet_dir=pretrained/full/ecn_fd_new/dispnet_model_best.pth.tar
+posenet_dir=pretrained/full/ecn_fd_new/exp_pose_model_best.pth.tar
+output_dir=./SET1_CUBE_CAR_PLANE_ecn_fd_output
+
+
+dataset_dir=/vulcan/scratch/anton/EV-IMO-learning
+
+
+COUNTER=0
+for folder in $(ls $dataset_dir)
+do
+    #echo $folder
+    data_dir="/vulcan/scratch/anton/EV-IMO-learning/$folder"
+    dispnet_dir=pretrained/full/ecn_fd_new/dispnet_model_best.pth.tar
+    posenet_dir=pretrained/full/ecn_fd_new/exp_pose_model_best.pth.tar
+    output_dir="/vulcan/scratch/cxy/outputs/"$folder
+    echo $output_dir
+    echo $COUNTER
+    eval "CUDA_VISIBLE_DEVICES=$COUNTER python run_inference.py --img-height 260 --img-width 346 --final-map-size 4  --dataset-dir $data_dir --pretrained-dispnet $dispnet_dir --pretrained-posenet $posenet_dir --sequence-length 5 --output-dir $output_dir -c 4 &"
+    let COUNTER+=1
+    let COUNTER%=4
+done
