@@ -204,7 +204,7 @@ class explainability_loss_new(nn.Module):
 
 
             for c in range(C):
-                ones_var = (F.adaptive_avg_pool2d((torch.round(gt_mask)==c).type_as(mask_scaled), (H, W)) ).type_as(mask_scaled)
+                ones_var = (F.adaptive_avg_pool2d((gt_mask==c).type_as(mask_scaled), (H, W)) ).type_as(mask_scaled)
                 loss = loss+ nn.functional.binary_cross_entropy(mask_scaled[:, c:c+1], ones_var)*H*W
                 #print(c,ones_var.sum().item())
             weight+=H*W
