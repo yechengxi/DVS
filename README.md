@@ -303,3 +303,6 @@ do
     let COUNTER+=1
     let COUNTER%=4
 done
+
+data_dir=/vulcan/scratch/anton/EV-IMO-learning/SET4_O1O3_TOP
+CUDA_VISIBLE_DEVICES=0 python test_run.py --img-height 260 --img-width 346 --final-map-size 8  --dataset-dir $data_dir  --norm-type bn --sequence-length 5 --output-dir ./tmp -c 4 
