@@ -277,6 +277,9 @@ def main():
     args.explainability_loss=explainability_loss().cuda()
     args.explainability_loss = torch.nn.DataParallel(args.explainability_loss)
 
+    args.explainability_loss_new=explainability_loss_new().cuda()
+    args.explainability_loss_new = torch.nn.DataParallel(args.explainability_loss_new)
+
     args.explainability_loss_new2=explainability_loss_new2().cuda()
     args.explainability_loss_new2 = torch.nn.DataParallel(args.explainability_loss_new2)
 

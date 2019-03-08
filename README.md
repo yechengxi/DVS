@@ -306,3 +306,11 @@ done
 
 data_dir=/vulcan/scratch/anton/EV-IMO-learning/SET4_O1O3_TOP
 CUDA_VISIBLE_DEVICES=0 python test_run.py --img-height 260 --img-width 346 --final-map-size 8  --dataset-dir $data_dir  --norm-type bn --sequence-length 5 --output-dir ./tmp -c 4 
+
+
+data_dir=/vulcan/scratch/anton/EV-IMO-learning
+
+dispnet_dir=pretrained/full/ecn_fd_new/dispnet_model_best.pth.tar
+posenet_dir=pretrained/full/ecn_fd_new/exp_pose_model_best.pth.tar
+
+python main.py $data_dir -j16 -d0.5  --batch-size 32 -f 100 --lr 1e-3 --sequence-length 5 --log-output --with-gt  --epochs 10 --norm-type fd --pretrained-dispnet $dispnet_dir --pretrained-posenet $posenet_dir --debug >new_exp.1.log &
