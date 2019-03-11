@@ -294,9 +294,9 @@ for folder in $(ls $dataset_dir)
 do
     #echo $folder
     data_dir="/vulcan/scratch/anton/EV-IMO-learning/$folder"
-    dispnet_dir=pretrained/full/ecn_fd_new/dispnet_model_best.pth.tar
-    posenet_dir=pretrained/full/ecn_fd_new/exp_pose_model_best.pth.tar
-    output_dir="/vulcan/scratch/cxy/outputs/"$folder
+    dispnet_dir=pretrained/full/new_mask/dispnet_model_best.pth.tar
+    posenet_dir=pretrained/full/new_mask/exp_pose_model_best.pth.tar
+    output_dir="/vulcan/scratch/cxy/outputs_new1/"$folder
     echo $output_dir
     echo $COUNTER
     eval "CUDA_VISIBLE_DEVICES=$COUNTER python run_inference.py --img-height 260 --img-width 346 --final-map-size 4  --dataset-dir $data_dir --pretrained-dispnet $dispnet_dir --pretrained-posenet $posenet_dir --sequence-length 5 --output-dir $output_dir -c 4 &"
@@ -314,3 +314,15 @@ dispnet_dir=pretrained/full/ecn_fd_new/dispnet_model_best.pth.tar
 posenet_dir=pretrained/full/ecn_fd_new/exp_pose_model_best.pth.tar
 
 python main.py $data_dir -j16 -d0.5  --batch-size 32 -f 100 --lr 1e-3 --sequence-length 5 --log-output --with-gt  --epochs 10 --norm-type fd --pretrained-dispnet $dispnet_dir --pretrained-posenet $posenet_dir --debug >new_exp.1.log &
+
+
+
+
+
+data_dir=/home/cxy/Data/DVS/EV-IMO-learning-1/SET1_CUBE_CAR_PLANE
+dispnet_dir=pretrained/imo/new_mask/dispnet_model_best.pth.tar
+posenet_dir=pretrained/imo/new_mask/exp_pose_model_best.pth.tar
+output_dir=/home/cxy/SET1_CUBE_CAR_PLANE_ecn_output_fd
+
+CUDA_VISIBLE_DEVICES=0 python run_inference.py --img-height 260 --img-width 346 --final-map-size 4  --dataset-dir $data_dir --pretrained-dispnet $dispnet_dir --pretrained-posenet $posenet_dir --sequence-length 5 --output-dir $output_dir 
+

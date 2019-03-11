@@ -179,7 +179,8 @@ def main():
                             final_pose[0].cpu().data.numpy().transpose((1, 2, 0)))
                     np.save(output_dir / 'motion_mask_{}{}'.format(file.namebase, '.npy'),
                             explainability_mask[0].cpu().data.numpy().transpose((1,2,0)))
-                    exp = (255*tensor2array(1-explainability_mask[0,0].data.cpu(), max_value=None, colormap='bone')).astype(np.uint8).transpose(1,2,0)
+                    #exp = (255*tensor2array(1-explainability_mask[0,0].data.cpu(), max_value=None, colormap='bone')).astype(np.uint8).transpose(1,2,0)
+                    exp = (255*tensor2array(explainability_mask[0,0:3].data.cpu(), max_value=None, colormap='bone')).astype(np.uint8).transpose(1,2,0)
 
                 end = timer()
                 pose_time += end - start

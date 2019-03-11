@@ -129,7 +129,7 @@ parser.add_argument("--dataset-list", default=None, type=str, help="Dataset list
 
 parser.add_argument("--scale", default=1., type=float, help="rescaling factor")
 
-parser.add_argument('--debug', action='store_true', help='debug mode.')
+parser.add_argument('--debug', default=0, help='debug mode.')
 
 best_error = -1
 n_iter = 0
@@ -453,10 +453,13 @@ def train(args, train_loader, disp_net, pose_exp_net,optimizer, epoch_size,  tra
             w2=0
 
         if w2 > 0:
-            if not args.debug:
+            if args.debug==0:
                 loss_2 = args.explainability_loss(explainability_mask,gt_mask).mean()
-            else:
+            elif args.debug==1:
                 loss_2 = args.explainability_loss_new(explainability_mask,gt_mask).mean()
+            elif args.debug==2:
+                loss_2 = args.explainability_loss_new2(explainability_mask,gt_mask).mean()
+
         else:
             loss_2 = 0
 
