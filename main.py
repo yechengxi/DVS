@@ -129,7 +129,7 @@ parser.add_argument("--dataset-list", default=None, type=str, help="Dataset list
 
 parser.add_argument("--scale", default=1., type=float, help="rescaling factor")
 
-parser.add_argument('--debug', default=0, help='debug mode.')
+parser.add_argument('--debug', default=0, type=int, help='debug mode.')
 
 best_error = -1
 n_iter = 0
