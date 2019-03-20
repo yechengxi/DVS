@@ -8,7 +8,8 @@ data_dir=/vulcan/scratch/cxy/Data/DVS/MVSEC/
 python main.py $data_dir -j 32 -m.1 --batch-size 32 -f 50 --lr 1e-2 --sequence-length 5 --log-output --with-gt --norm-type bn --final-map-size 4 --epochs 50 >seq5.bn.log&
 
 
-Below is for my own personal record:
+Below is for my personal record:
+
 CMD:
 
 Latest:
