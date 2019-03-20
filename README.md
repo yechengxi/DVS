@@ -1,4 +1,7 @@
 # DVS
+main.py is the training protocol. 
+run_inference.py runs the inference part once you have a pretrained model.
+
 
 CMD:
 
