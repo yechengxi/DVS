@@ -259,8 +259,6 @@ def simple_inverse_warp(img, depth, pose, intrinsics,intrinsics_inv, padding_mod
 
     new_grid,flow =get_new_grid(depth, pose, intrinsics, intrinsics_inv)
 
-    loss = epipolar_loss(flow, pose, intrinsics, intrinsics_inv)
-
     if padding_mode == 'zeros':
         mask=((new_grid>1)+(new_grid<-1)).detach()
         new_grid[mask] = 2
