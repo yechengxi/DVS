@@ -457,7 +457,7 @@ def train(args, train_loader, disp_net, pose_exp_net, optimizer, epoch_size,  tr
                                                   rotation_mode=args.rotation_mode,
                                                   padding_mode=args.padding_mode)[0]
                     else:
-                        current_pose = pose[:1, j]
+                        current_pose = pose[:, j]
 
                         ref_warped, _, flow = simple_inverse_warp(ref, scaled_depth[:, 0], current_pose,
                                                                   intrinsics_scaled, intrinsics_scaled_inv,

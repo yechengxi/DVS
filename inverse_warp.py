@@ -259,6 +259,9 @@ def simple_inverse_warp(img, depth, pose, intrinsics,intrinsics_inv, padding_mod
 
     new_grid,flow =get_new_grid(depth, pose, intrinsics, intrinsics_inv)
 
+    #loss = epipolar_loss(flow, pose, intrinsics, intrinsics_inv)
+    #print(loss.item())
+
     if padding_mode == 'zeros':
         mask=((new_grid>1)+(new_grid<-1)).detach()
         new_grid[mask] = 2
@@ -302,6 +305,7 @@ def epipolar_loss(flow,pose,intrinsics,intrinsics_inv):
     b,  h, w, c = flow.size()
 
     E=compute_E(pose)
+
     i_range = torch.arange(0, h, dtype=pose.dtype, device=pose.device, requires_grad=False).view(1, h, 1).expand(1, h, w)  # [1, H, W]
     j_range = torch.arange(0, w, dtype=pose.dtype, device=pose.device, requires_grad=False).view(1, 1, w).expand(1, h, w)  # [1, H, W]
     ones = torch.ones(1, h, w, dtype=pose.dtype, device=pose.device, requires_grad=False)
@@ -314,7 +318,8 @@ def epipolar_loss(flow,pose,intrinsics,intrinsics_inv):
     cam_coords=cam_coords.permute(0,2,3,1).unsqueeze(4)
 
     new_cam_coords=new_cam_coords.permute(0,2,3,1).unsqueeze(3)
+
     loss=new_cam_coords@E.view(b,1,1,3,3)@cam_coords#check the order --cam_coords@E@new_cam_coords
 
-    return (loss**2).mean()
+    return (loss.abs()).mean()
 
