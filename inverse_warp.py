@@ -266,3 +266,32 @@ def simple_inverse_warp(img, depth, pose, intrinsics,intrinsics_inv, padding_mod
     projected_img = torch.nn.functional.grid_sample(img, new_grid, padding_mode=padding_mode)
 
     return projected_img,new_grid, flow
+
+
+
+def compute_E(vec):
+    """
+    Convert 6DoF parameters to essential matrix.
+
+    Args:s
+        vec: 6DoF parameters in the order of tx, ty, tz, rx, ry, rz -- [B, 6]
+    Returns:
+        Essential matrix -- [B, 3, 3]
+    """
+    b=vec.shape[0]
+    t = vec[:, :3]  # [B, 3, 1]
+    rot = vec[:,3:]
+    rot_mat = euler2mat(rot)  # [B, 3, 3]
+
+    #https://en.wikipedia.org/wiki/Cross_product#Conversion_to_matrix_multiplication
+    t_x = vec.new_zeros(b, 3, 3, requires_grad=False)
+    t_x[:, 0, 1] = -t[:,2]
+    t_x[:, 1, 0] = t[:, 2]
+    t_x[:, 0, 2] = t[:, 1]
+    t_x[:, 2, 0] = -t[:, 1]
+    t_x[:, 1, 2] = -t[:, 0]
+    t_x[:, 2, 1] = t[:, 0]
+
+    #https://en.wikipedia.org/wiki/Essential_matrix
+    E_mat =  rot_mat.bmm(t_x) # [B, 3, 3]
+    return E_mat
