@@ -259,6 +259,8 @@ def simple_inverse_warp(img, depth, pose, intrinsics,intrinsics_inv, padding_mod
 
     new_grid,flow =get_new_grid(depth, pose, intrinsics, intrinsics_inv)
 
+    loss = epipolar_loss(flow, pose, intrinsics, intrinsics_inv)
+
     if padding_mode == 'zeros':
         mask=((new_grid>1)+(new_grid<-1)).detach()
         new_grid[mask] = 2
@@ -295,3 +297,26 @@ def compute_E(vec):
     #https://en.wikipedia.org/wiki/Essential_matrix
     E_mat =  rot_mat.bmm(t_x) # [B, 3, 3]
     return E_mat
+
+
+def epipolar_loss(flow,pose,intrinsics,intrinsics_inv):
+
+    b,  h, w, c = flow.size()
+
+    E=compute_E(pose)
+    i_range = torch.arange(0, h, dtype=pose.dtype, device=pose.device, requires_grad=False).view(1, h, 1).expand(1, h, w)  # [1, H, W]
+    j_range = torch.arange(0, w, dtype=pose.dtype, device=pose.device, requires_grad=False).view(1, 1, w).expand(1, h, w)  # [1, H, W]
+    ones = torch.ones(1, h, w, dtype=pose.dtype, device=pose.device, requires_grad=False)
+    pixel_coords = torch.stack((j_range, i_range, ones), dim=1)  # [1, 3, H, W]
+
+    current_pixel_coords = pixel_coords[:, :, :h, :w].expand(b, 3, h, w).contiguous().view(b,3,-1)  # [B, 3, H*W]
+    cam_coords = intrinsics_inv.bmm(current_pixel_coords).view(b, 3, h, w)
+
+    new_cam_coords=torch.cat([cam_coords[:,:2]+flow.permute(0,3,1,2),cam_coords[:,2:]],dim=1)
+    cam_coords=cam_coords.permute(0,2,3,1).unsqueeze(4)
+
+    new_cam_coords=new_cam_coords.permute(0,2,3,1).unsqueeze(3)
+    loss=new_cam_coords@E.view(b,1,1,3,3)@cam_coords#check the order --cam_coords@E@new_cam_coords
+
+    return (loss**2).mean()
+
